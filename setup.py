@@ -6,6 +6,8 @@ setup(
     packages=find_packages(),
     # Add dependencies here
     install_requires=[
+    "libkrb5-dev",
+    "libsasl2-dev",
     "pymssql",
     "pyodbc",
     "psycopg2",
