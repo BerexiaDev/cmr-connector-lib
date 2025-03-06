@@ -6,11 +6,15 @@ setup(
     packages=find_packages(),
     # Add dependencies here
     install_requires=[
-       
+    "pymssql",
+    "pyodbc",
+    "psycopg2",
+    "sqlalchemy",
+    "cx_oracle"
     ],
     description='CMR Connectors Library',
-    author='Berexia',
-    author_email='berexia.dev@gmail.com',
+    author='Soufiane',
+    author_email='soufiane.amghar@berexia.com',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     classifiers=[
