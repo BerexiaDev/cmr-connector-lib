@@ -1,5 +1,5 @@
 ## CMR Connectors Library
-
+This library returns connectors to use in your projects from different databases.
 
 
 ## Push to pypi
