@@ -2,11 +2,10 @@ from setuptools import setup, find_packages
 
 setup(
     name='cmr_connectors_lib',
-    version='0.3',
+    version='0.4',
     packages=find_packages(),
     # Add dependencies here
     install_requires=[
-    "pymssql",
     "pyodbc",
     "psycopg2",
     "sqlalchemy",
