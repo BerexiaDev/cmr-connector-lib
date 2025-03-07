@@ -1,6 +1,6 @@
-from database_connectors.oracle_connector import OracleConnector
-from database_connectors.postgres_connector import PostgresConnector
-from database_connectors.sql_server_connector import SqlServerConnector
+from cmr_connectors_lib.database_connectors.oracle_connector import OracleConnector
+from cmr_connectors_lib.database_connectors.postgres_connector import PostgresConnector
+from cmr_connectors_lib.database_connectors.sql_server_connector import SqlServerConnector
 
 
 class ConnectorFactory():
