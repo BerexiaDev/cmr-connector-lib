@@ -5,7 +5,7 @@ from urllib.parse import quote
 import pandas as pd
 from sqlalchemy import create_engine
 
-from connectors.connector import Connector
+from cmr_connectors_lib.connector import Connector
 
 
 class SqlConnector(Connector):
