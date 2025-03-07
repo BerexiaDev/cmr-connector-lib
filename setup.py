@@ -2,12 +2,10 @@ from setuptools import setup, find_packages
 
 setup(
     name='cmr_connectors_lib',
-    version='0.1',
+    version='0.2',
     packages=find_packages(),
     # Add dependencies here
     install_requires=[
-    "libkrb5-dev",
-    "libsasl2-dev",
     "pymssql",
     "pyodbc",
     "psycopg2",
