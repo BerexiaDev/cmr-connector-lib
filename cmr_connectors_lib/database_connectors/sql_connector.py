@@ -3,7 +3,7 @@
 
 from urllib.parse import quote
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 
 from cmr_connectors_lib.connector import Connector
 
@@ -28,6 +28,12 @@ class SqlConnector(Connector):
     def get_connection(self):
         """Returns a connection object from the engine."""
         return self.get_engine().connect()
+    
+    def get_connection_tables(self):
+        """Returns a list of all table names in the database."""
+        engine = self.get_engine()
+        inspector = inspect(engine)
+        return inspector.get_table_names()
 
     def get_df(self, query, preview=False, rows=10, *args, **kwargs):
         constructed_query = self.construct_query(query, preview, rows)
