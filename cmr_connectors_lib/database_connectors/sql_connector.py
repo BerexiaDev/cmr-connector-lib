@@ -34,6 +34,12 @@ class SqlConnector(Connector):
         engine = self.get_engine()
         inspector = inspect(engine)
         return inspector.get_table_names()
+    
+    def get_connection_columns(self, table_name):
+        """Returns a list of all column names in the table."""
+        engine = self.get_engine()
+        inspector = inspect(engine)
+        return inspector.get_columns(table_name)
 
     def get_df(self, query, preview=False, rows=10, *args, **kwargs):
         constructed_query = self.construct_query(query, preview, rows)
