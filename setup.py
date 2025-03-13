@@ -2,14 +2,15 @@ from setuptools import setup, find_packages
 
 setup(
     name='cmr_connectors_lib',
-    version='0.6',
+    version='0.7',
     packages=find_packages(),
     # Add dependencies here
     install_requires=[
     "pyodbc",
     "psycopg2",
     "sqlalchemy",
-    "cx_oracle"
+    "cx_oracle",
+    "InformixDB"
     ],
     description='CMR Connectors Library',
     author='Soufiane',
