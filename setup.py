@@ -6,11 +6,12 @@ setup(
     packages=find_packages(),
     # Add dependencies here
     install_requires=[
-    "pyodbc",
-    "psycopg2",
-    "sqlalchemy",
-    "cx_oracle",
-    "InformixDB"
+        "pyodbc",
+        "psycopg2",
+        "sqlalchemy",
+        "cx_oracle",
+        "ibm_db",  # Replacing InformixDB
+        "ibm_db_dbi"  
     ],
     description='CMR Connectors Library',
     author='Soufiane',

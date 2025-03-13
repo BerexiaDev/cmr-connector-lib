@@ -29,7 +29,7 @@ class ConnectorFactory():
         elif connector_type == 'informix':
             connector = InformixConnector(connector_settings["host"], connector_settings["user"],
                                           connector_settings["password"], connector_settings["port"],
-                                          connector_settings["database"])
+                                          connector_settings["database"], connector_settings["server"])
             return connector
     
     
