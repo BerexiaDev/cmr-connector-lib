@@ -4,6 +4,7 @@
 from .sql_connector import SqlConnector
 from .sql_connector_utils import cast_informix_to_typescript_types
 import pyodbc
+import os
 
 
 class InformixConnector(SqlConnector):
@@ -11,8 +12,13 @@ class InformixConnector(SqlConnector):
     def __init__(self, host, user, password, port, database, protocol):
         super().__init__(host, user, password, port, database)
         self.protocol = protocol
-        #TODO: Use custom path
-        self.driver_path = "./cmr_api/app/main/drivers/ddifcl28.so"
+        # Get the path relative to the virtual environment
+        venv_path = os.environ.get('VIRTUAL_ENV')
+        if venv_path:
+            self.driver_path = os.path.join(venv_path, 'app/main/drivers/ddifcl28.so')
+        else:
+            # Fallback to the current working directory
+            self.driver_path = os.path.abspath('app/main/drivers/ddifcl28.so')
 
     def construct_query(self, query, preview, rows):
         if preview:
