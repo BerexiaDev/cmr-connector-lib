@@ -7,10 +7,11 @@ from sqlalchemy import create_engine
 
 class InformixConnector(SqlConnector):
 
-    def __init__(self, host, user, password, port, database, server):
+    def __init__(self, host, user, password, port, database, protocol):
         super().__init__(host, user, password, port, database)
-        self.driver = "informix+ibm_db"
-        self.server = server  # Required for Informix
+        self.driver = "pyodbc"
+        self.protocol = protocol  # Required for Informix
+        self.driver_path = "/home/soufiane/Bureau/cmr-etl/cmr_driver/ddifcl28.so"
 
     def construct_query(self, query, preview, rows):
         if preview:
@@ -21,9 +22,15 @@ class InformixConnector(SqlConnector):
         return query
 
     def get_engine(self):
-        informix_connection_string = (
-            "{driver}://{username}:{password}@{hostname}:{port}/{database};"
-            "SERVER={server}"
+        informix_connection_string =  (
+            f"DRIVER={self.driver};"
+            f"DATABASE={self.database};"
+            f"HOSTNAME={self.host};"
+            f"PORT={self.port};"
+            f"PROTOCOL={self.protocol};"
+            f"UID={self.user};"
+            f"PWD={self.password};"
+            f"DRIVER_PATH={self.driver_path};"
         )
         engine = create_engine(
             informix_connection_string.format(
@@ -33,7 +40,8 @@ class InformixConnector(SqlConnector):
                 hostname=self.host,
                 port=self.port,
                 database=self.database,
-                server=self.server
+                protocol=self.protocol,
+                driver_path=self.driver_path
             )
         )
         return engine

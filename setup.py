@@ -10,7 +10,7 @@ setup(
         "psycopg2",
         "sqlalchemy",
         "cx_oracle",
-        "ibm_db"  # Replacing InformixDB 
+        "pyodbc"
     ],
     description='CMR Connectors Library',
     author='Soufiane',
