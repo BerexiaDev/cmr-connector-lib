@@ -12,7 +12,7 @@ class InformixConnector(SqlConnector):
         super().__init__(host, user, password, port, database)
         self.protocol = protocol  # Required for Informix
         #TODO: Use custom path
-        self.driver_path = "cmr_api/app/main/drivers/ddifcl28.so"
+        self.driver_path = "app/main/drivers/ddifcl28.so"
 
     def construct_query(self, query, preview, rows):
         if preview:
