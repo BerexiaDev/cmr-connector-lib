@@ -4,6 +4,7 @@
 from urllib.parse import quote
 import pandas as pd
 from sqlalchemy import create_engine, inspect
+from .sql_connector_utils import cast_sql_to_typescript_types
 
 from cmr_connectors_lib.connector import Connector
 
@@ -39,7 +40,8 @@ class SqlConnector(Connector):
         """Returns a list of all column names in the table."""
         engine = self.get_engine()
         inspector = inspect(engine)
-        return inspector.get_columns(table_name)
+        columns = [{'name': col['name'], 'type': cast_sql_to_typescript_types(col['type'])} for col in inspector.get_columns(table_name)]
+        return columns
 
     def get_df(self, query, preview=False, rows=10, *args, **kwargs):
         constructed_query = self.construct_query(query, preview, rows)
