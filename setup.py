@@ -10,7 +10,6 @@ setup(
         "psycopg2",
         "sqlalchemy",
         "cx_oracle",
-        "pyodbc"
     ],
     description='CMR Connectors Library',
     author='Soufiane',
