@@ -4,7 +4,7 @@
 from urllib.parse import quote
 import pandas as pd
 from loguru import logger
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 from .sql_connector_utils import cast_sql_to_typescript_types
 
 from cmr_connectors_lib.connector import Connector
@@ -35,7 +35,7 @@ class SqlConnector(Connector):
         """Returns True if the connection is successful, False otherwise."""
         try:
             with self.get_connection() as conn:  # Use context manager to handle connection cleanup
-                result = conn.execute("SELECT 1")  # Execute the query
+                result = conn.execute(text("SELECT 1"))  # Execute the query
                 result.fetchone()  # Ensure the query runs
                 logger.info("Database connection is active.")
                 return True
