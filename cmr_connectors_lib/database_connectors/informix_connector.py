@@ -3,6 +3,7 @@
 
 from .sql_connector import SqlConnector
 from .sql_connector_utils import cast_informix_to_typescript_types
+from loguru import logger
 import pyodbc
 
 
@@ -38,6 +39,19 @@ class InformixConnector(SqlConnector):
         conn.setdecoding(pyodbc.SQL_WCHAR, encoding="utf-8")
         return conn
 
+    def ping(self):
+        """Returns True if the connection is successful, False otherwise."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()  # Ensure the query runs
+            logger.info("Database connection is active.")
+            cursor.close()
+            return True
+        except Exception as e:
+            logger.error(f"Database connection failed: {e}")
+            return False
     def get_connection_tables(self):
         """Returns a list of all table names in the cmr database."""
         cursor = self.get_connection().cursor()
