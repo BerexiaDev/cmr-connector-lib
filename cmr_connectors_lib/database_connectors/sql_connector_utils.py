@@ -64,6 +64,7 @@ def cast_informix_to_typescript_types(informix_type):
         53: "number",     # BIGSERIAL (Auto-increment BIGINT)
         2061: "string",   # IDSSECURITYLABEL (Security label, stored as string)
         262: "number",    # DISTINCT type (Numeric-based)
+        269: "string",
         4118: "unknown"   # ROW (Named composite type)
     }
 
