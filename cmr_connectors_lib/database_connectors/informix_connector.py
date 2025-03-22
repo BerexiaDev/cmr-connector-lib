@@ -55,6 +55,9 @@ class InformixConnector(SqlConnector):
         FROM syscolumns 
         WHERE tabid = (SELECT tabid FROM systables WHERE tabname = '{table_name}')
     """)
+        
+        for row in cursor.fetchall():
+            print("colname: ", row.colname, "coltype: ", row.coltype)
 
         columns = [{'name': row.colname, 'type': cast_informix_to_typescript_types(row.coltype)} for row in cursor.fetchall()]
     
