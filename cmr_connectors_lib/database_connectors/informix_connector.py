@@ -4,7 +4,7 @@
 from .sql_connector import SqlConnector
 from .sql_connector_utils import cast_informix_to_typescript_types
 import pyodbc
-
+from loguru import logger
 
 class InformixConnector(SqlConnector):
 
@@ -57,7 +57,7 @@ class InformixConnector(SqlConnector):
     """)
         
         for row in cursor.fetchall():
-            print("colname: ", row.colname, "coltype: ", row.coltype)
+            logger.info("colname: {}, coltype: {}", row.colname, row.coltype)
 
         columns = [{'name': row.colname, 'type': cast_informix_to_typescript_types(row.coltype)} for row in cursor.fetchall()]
     
