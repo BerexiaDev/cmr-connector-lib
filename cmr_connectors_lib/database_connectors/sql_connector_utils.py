@@ -27,7 +27,7 @@ def cast_sql_to_typescript_types(sa_type):
         # Default fallback
         return "string"
     
-def cast_informix_to_typescript_types(informix_type):
+def cast_informix_to_typescript_types(informix_type: int) -> str:
     """Maps Informix coltype to Typescript types."""
     
     informix_to_ts = {

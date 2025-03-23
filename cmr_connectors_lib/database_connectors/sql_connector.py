@@ -1,13 +1,13 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+from typing import Dict
 from urllib.parse import quote
 import pandas as pd
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, Table, MetaData
 from .sql_connector_utils import cast_sql_to_typescript_types
-
 from cmr_connectors_lib.connector import Connector
-
+from loguru import logger
 
 class SqlConnector(Connector):
 
@@ -54,3 +54,14 @@ class SqlConnector(Connector):
 
     def construct_query(self, query, preview, rows):
         return query
+    
+    
+    def get_database_schema(self) -> Dict[str, Table]:
+        try:
+            connection = self.get_connection()
+            metadata = MetaData()
+            metadata.reflect(bind=connection)
+            return metadata.tables
+        except Exception as reflect_err:
+            logger.error(f"Schema reflection error: {reflect_err}")
+            raise ValueError(f"Failed to retrieve database schema: {str(reflect_err)}")
