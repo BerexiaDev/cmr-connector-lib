@@ -6,6 +6,7 @@ from .sql_connector import SqlConnector
 from .sql_connector_utils import cast_informix_to_typescript_types
 import pyodbc
 from loguru import logger
+import os
 
 class InformixConnector(SqlConnector):
 
@@ -64,6 +65,17 @@ class InformixConnector(SqlConnector):
     
         cursor.close()
         return columns
+    
+    def count_table_rows(self, table_name: str) -> int:
+        try:
+            connection = self.get_connection()
+            count_result = connection.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+            total_count = int(count_result[0]) if count_result else 0
+            return total_count
+        except Exception as e:
+            logger.error(f"Error getting table total rows: {str(e)}")
+            raise ValueError(f"Failed to get table total rows: {str(e)}")
+    
     
     def get_database_schema(self) -> Dict[str, Dict]:
         try:
