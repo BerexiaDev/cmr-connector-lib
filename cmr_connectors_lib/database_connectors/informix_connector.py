@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import pyodbc
-from typing import Dict, List
+from typing import Dict
 from .sql_connector import SqlConnector
 from .sql_connector_utils import cast_informix_to_typescript_types
 from loguru import logger
@@ -59,38 +59,24 @@ class InformixConnector(SqlConnector):
         cursor.close()
         return tables
 
-    def get_connection_columns(self, table_name: str) -> List[Dict[str, str]]:
+    def get_connection_columns(self, table_name):
         """Returns a list of dictionaries with column names and types for the given table."""
-        try:
-            cursor = self.get_connection().cursor()
-            
-            query = """
-                SELECT colname, coltype 
-                FROM syscolumns 
-                WHERE 
-                tabid = (SELECT tabid FROM systables WHERE tabname = UPPER(?))
-            """
-            
-            cursor.execute(query, (table_name,))
-            rows = cursor.fetchall()
-            
-            columns = []
-            for row in rows:
-                logger.debug("Column found - name: {}, type: {}", row.colname, row.coltype)
-                columns.append({
-                    'name': row.colname,
-                    'type': cast_informix_to_typescript_types(row.coltype)
-                })
-            logger.info(f"Columns for table {table_name}: {columns}")
-            return columns
-            
-        except Exception as e:
-            logger.error("Failed to get columns for table {}: {}", table_name, str(e))
-            raise ValueError(f"Failed to get columns for table {table_name}: {str(e)}")
-            
-        finally:
-            if cursor:
-                cursor.close()
+        cursor = self.get_connection().cursor()
+    
+        cursor.execute(f"""
+            SELECT colname, coltype 
+            FROM syscolumns 
+            WHERE tabid = (SELECT tabid FROM systables WHERE tabname = '{table_name}')
+        """)
+        rows = cursor.fetchall()
+        
+        for row in rows:
+            logger.info("colname: {}, coltype: {}", row.colname, row.coltype)
+
+        columns = [{'name': row.colname, 'type': cast_informix_to_typescript_types(row.coltype)} for row in rows]
+    
+        cursor.close()
+        return columns
     
     def count_table_rows(self, table_name: str) -> int:
         try:
