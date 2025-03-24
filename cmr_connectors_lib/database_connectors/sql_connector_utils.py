@@ -27,7 +27,7 @@ def cast_sql_to_typescript_types(sa_type):
         # Default fallback
         return "string"
     
-def cast_informix_to_typescript_types(informix_type):
+def cast_informix_to_typescript_types(informix_type: int) -> str:
     """Maps Informix coltype to Typescript types."""
     
     informix_to_ts = {
@@ -40,30 +40,32 @@ def cast_informix_to_typescript_types(informix_type):
         6: "number",      # SERIAL (Auto-increment INT)
         7: "Date",        # DATE
         8: "number",      # MONEY
-        9:  "null",       # NULL (unspecified type)
+        9: "null",        # NULL (unspecified type)
         10: "Date",       # DATETIME
-        11: "binary",     # BYTE
-        12: "string",     # TEXT
+        11: "binary",     # BYTE (Binary data)
+        12: "string",     # TEXT (Large character object)
         13: "string",     # VARCHAR
-        14: "string",     # INTERVAL (custom handling needed)
-        15: "string",     # NCHAR
-        16: "string",     # NVARCHAR
-        17: "number",     # INT8
+        14: "string",     # INTERVAL (Duration, might need parsing)
+        15: "string",     # NCHAR (Fixed-length Unicode)
+        16: "string",     # NVARCHAR (Variable-length Unicode)
+        17: "number",     # INT8 (BIGINT)
         18: "number",     # SERIAL8 (Auto-increment BIGINT)
-        19: "unknown",    # SET (unsupported)
-        20: "unknown",    # MULTISET (unsupported)
-        21: "unknown",    # LIST (unsupported)
-        22: "unknown",    # ROW (unnamed)
-        23: "unknown",    # COLLECTION (unsupported)
-        40: "string",     # LVARCHAR fixed-length opaque types
-        41: "string",     # BLOB, BOOLEAN, CLOB (variable-length opaque types)
-        43: "string",     # LVARCHAR (client-side only)
+        19: "unknown",    # SET (Collection type, unsupported in TS)
+        20: "unknown",    # MULTISET (Collection type, unsupported in TS)
+        21: "unknown",    # LIST (Collection type, unsupported in TS)
+        22: "unknown",    # ROW (Unnamed composite type)
+        23: "unknown",    # COLLECTION (General collection type)
+        40: "string",     # LVARCHAR (Large variable-length string)
+        41: "binary",     # BLOB (Binary large object)
+        42: "string",     # CLOB (Character large object)
+        43: "string",     # LVARCHAR (Client-side only)
         45: "boolean",    # BOOLEAN
         52: "number",     # BIGINT
         53: "number",     # BIGSERIAL (Auto-increment BIGINT)
-        2061: "string",   # IDSSECURITYLABEL (custom security label)
-        262: "number",    # DISTINCT type
-        4118: "unknown"   # ROW (named)
+        2061: "string",   # IDSSECURITYLABEL (Security label, stored as string)
+        262: "number",    # DISTINCT type (Numeric-based)
+        269: "string",
+        4118: "unknown"   # ROW (Named composite type)
     }
 
     return informix_to_ts.get(informix_type, "unknown")  # Default to "unknown" if type is not listed
