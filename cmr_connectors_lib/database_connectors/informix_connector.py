@@ -67,7 +67,8 @@ class InformixConnector(SqlConnector):
             query = """
                 SELECT colname, coltype 
                 FROM syscolumns 
-                WHERE tabid = (SELECT tabid FROM systables WHERE tabname = ?)
+                WHERE 
+                tabid = (SELECT tabid FROM systables WHERE tabname = UPPER(?))
             """
             
             cursor.execute(query, (table_name,))
