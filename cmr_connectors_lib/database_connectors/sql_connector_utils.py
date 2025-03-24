@@ -56,7 +56,7 @@ def cast_informix_to_typescript_types(informix_type: int) -> str:
         22: "unknown",    # ROW (Unnamed composite type)
         23: "unknown",    # COLLECTION (General collection type)
         40: "string",     # LVARCHAR (Large variable-length string)
-        41: "binary",     # BLOB (Binary large object)
+        41: "boolean",     # BLOB (Binary large object)
         42: "string",     # CLOB (Character large object)
         43: "string",     # LVARCHAR (Client-side only)
         45: "boolean",    # BOOLEAN
