@@ -51,6 +51,7 @@ class InformixConnector(SqlConnector):
         except Exception as e:
             logger.error(f"Database connection failed: {e}")
             return False
+    
     def get_connection_tables(self):
         """Returns a list of all table names in the cmr database."""
         cursor = self.get_connection().cursor()
