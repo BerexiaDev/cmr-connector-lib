@@ -50,22 +50,33 @@ def cast_informix_to_typescript_types(informix_type: int) -> str:
         16: "string",     # NVARCHAR (Variable-length Unicode)
         17: "number",     # INT8 (BIGINT)
         18: "number",     # SERIAL8 (Auto-increment BIGINT)
-        19: "unknown",    # SET (Collection type, unsupported in TS)
-        20: "unknown",    # MULTISET (Collection type, unsupported in TS)
-        21: "unknown",    # LIST (Collection type, unsupported in TS)
-        22: "unknown",    # ROW (Unnamed composite type)
-        23: "unknown",    # COLLECTION (General collection type)
+        19: "string[]",   # SET (Unordered collection)
+        20: "string[]",   # MULTISET (May contain duplicates)
+        21: "string[]",   # LIST (Ordered collection)
+        22: "Record<string, any>",  # ROW (Unnamed composite type)
+        23: "any[]",      # COLLECTION (General collection type)
         40: "string",     # LVARCHAR (Large variable-length string)
-        41: "boolean",    # Boolean
+        41: "boolean",    # BOOLEAN (newer Informix versions)
         42: "string",     # CLOB (Character large object)
         43: "string",     # LVARCHAR (Client-side only)
         45: "boolean",    # BOOLEAN
         52: "number",     # BIGINT
         53: "number",     # BIGSERIAL (Auto-increment BIGINT)
-        2061: "string",   # IDSSECURITYLABEL (Security label, stored as string)
-        262: "number",    # DISTINCT type (Numeric-based)
-        269: "string",
-        4118: "unknown"   # ROW (Named composite type)
+        262: "number",    # DISTINCT type (numeric based)
+        269: "string",    # VARCHAR with NOT NULL
+        2061: "string",   # IDSSECURITYLABEL (security label string)
+        4118: "Record<string, any>", # ROW (Named composite type),
+        24: "Record<string, any>",  # ROW (opaque UDT)
+        25: "number",               # REFSERIAL
+        26: "number",               # REFSERIAL8
+        27: "string",               # LVARCHAR (alternate variant)
+        28: "boolean",              # BOOLEAN (alias/variant)
+        31: "binary",               # BLOB
+        32: "boolean",              # BOOLEAN (older versions)
+        35: "string",               # IDSXML
+        36: "binary",               # IDSBLOB
+        37: "string",               # IDSCHARSET
+        4117: "Record<string, any>" # ROW (opaque composite)
     }
 
     return informix_to_ts.get(informix_type, "unknown")  # Default to "unknown" if type is not listed
