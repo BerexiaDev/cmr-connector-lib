@@ -145,15 +145,24 @@ class InformixConnector(SqlConnector):
                     columns = cursor.fetchall()
                     
                     if columns:
+                        # Build columns list while logging each column's info
+                        column_list = []
+                        for col in columns:
+                            col_name = col[0].strip()
+                            col_type = cast_informix_to_typescript_types(col[1])
+                            logger.debug(f"Column {col_name} has type {col[1]} wihch is {col_type}")
+                            column_list.append({
+                                'name': col_name,
+                                'type': col_type,
+                                'length': col[2]
+                            })
+                            
                         table_info = {
                             'name': table_name,
                             'owner': owner,
-                            'columns': [{
-                                'name': col[0].strip(),
-                                'type': cast_informix_to_typescript_types(col[1]),
-                                'length': col[2]
-                            } for col in columns]
+                            'columns': column_list
                         }
+                        
                         tables[table_name] = table_info
                         logger.debug(f"Added table {table_name} with {len(columns)} columns")
                 except Exception as col_err:
@@ -168,5 +177,3 @@ class InformixConnector(SqlConnector):
         except Exception as e:
             logger.error(f"Error getting database schema: {str(e)}")
             raise ValueError(f"Failed to retrieve database schema: {str(e)}")
-
-
