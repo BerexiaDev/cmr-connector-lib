@@ -10,7 +10,9 @@ setup(
         "psycopg2",
         "sqlalchemy",
         "cx_oracle",
-        "loguru"
+        "loguru",
+        "ibm-db",
+        "ibm_db_sa"
     ],
     description='CMR Connectors Library',
     author='Soufiane',
