@@ -12,7 +12,7 @@ class InformixConnector(SqlConnector):
         super().__init__(host, user, password, port, database)
         self.protocol = protocol
         self.locale = locale
-        self.driver_path = "app/main/drivers/ddifcl28.so"
+        self.driver = "ibm_db_sa"
 
     def construct_query(self, query, preview, rows):
         if preview:
@@ -22,34 +22,22 @@ class InformixConnector(SqlConnector):
                 query = f"SELECT FIRST {rows} * FROM ({query})"
         return query
 
-    def get_connection(self):
-        """Returns a connection object from the driver."""
+    def get_engine(self):
         conn_str = (
-            f"DRIVER={self.driver_path};"
-            f"DATABASE={self.database};"
-            f"HOSTNAME={self.host};"
-            f"PORT={self.port};"
-            f"PROTOCOL={self.protocol};"
-            f"UID={self.user};"
-            f"PWD={self.password};"
-            f"CLIENT_LOCALE={self.locale};"   # Explicitly set client locale
-            f"DB_LOCALE={self.locale};"       # Explicitly set database locale
-         )
-        logger.info(f"Connection string: {conn_str}")
-        conn = pyodbc.connect(conn_str)
-        conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
-        conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
-        return conn
+            f"{self.driver}://{self.user}:{self.password}@{self.host}:{self.port}/{self.database};"
+            f"DELIMIDENT=Y;PROTOCOL={self.protocol};LOCALE={self.locale}"
+        )
+        engine = create_engine(conn_str)
+        return engine
 
     def ping(self):
         """Returns True if the connection is successful, False otherwise."""
         try:
             conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1")
-            cursor.fetchone()  # Ensure the query runs
+            conn.execute("SELECT 1")
+            conn.fetchone()  # Ensure the query runs
             logger.info("Database connection is active.")
-            cursor.close()
+            conn.close()
             return True
         except Exception as e:
             logger.error(f"Database connection failed: {e}")
@@ -57,29 +45,29 @@ class InformixConnector(SqlConnector):
     
     def get_connection_tables(self):
         """Returns a list of all table names in the cmr database."""
-        cursor = self.get_connection().cursor()
-        cursor.execute("SELECT tabname FROM systables WHERE tabtype = 'T' AND tabname NOT LIKE 'sys%'")
-        tables = [row.tabname for row in cursor.fetchall()]
-        cursor.close()
+        connection = self.get_connection()
+        connection.execute("SELECT tabname FROM systables WHERE tabtype = 'T' AND tabname NOT LIKE 'sys%'")
+        tables = [row.tabname for row in connection.fetchall()]
+        connection.close()
         return tables
 
     def get_connection_columns(self, table_name):
         """Returns a list of dictionaries with column names and types for the given table."""
-        cursor = self.get_connection().cursor()
+        connection = self.get_connection()
     
-        cursor.execute(f"""
+        connection.execute(f"""
             SELECT colname, coltype 
             FROM syscolumns 
             WHERE tabid = (SELECT tabid FROM systables WHERE tabname = '{table_name}')
         """)
-        rows = cursor.fetchall()
+        rows = connection.fetchall()
         
         for row in rows:
             logger.info("colname: {}, coltype: {}", row.colname, row.coltype)
 
         columns = [{'name': row.colname, 'type': cast_informix_to_typescript_types(row.coltype)} for row in rows]
     
-        cursor.close()
+        connection.close()
         return columns
     
     def count_table_rows(self, table_name: str) -> int:
@@ -98,12 +86,12 @@ class InformixConnector(SqlConnector):
             # TODO: Use the connector to get the schema based on the connector type
             logger.debug("Getting database schema for Informix using pyodbc")
             tables = {}
-            cursor = self.get_connection().cursor()
+            connection = self.get_connection()
             
             # First, get the current database
             try:
-                cursor.execute("SELECT TRIM(DBINFO('dbname')) FROM systables WHERE tabid = 1")
-                current_db = cursor.fetchone()[0]
+                connection.execute("SELECT TRIM(DBINFO('dbname')) FROM systables WHERE tabid = 1")
+                current_db = connection.fetchone()[0]
                 logger.debug(f"Current database: {current_db}")
             except Exception as db_err:
                 logger.warning(f"Could not get current database: {db_err}")
@@ -119,8 +107,8 @@ class InformixConnector(SqlConnector):
                 AND t.tabid >= 100  -- User tables typically start from 100
             """
             logger.debug(f"Executing table query: {table_query}")
-            cursor.execute(table_query)
-            table_rows = cursor.fetchall()
+            connection.execute(table_query)
+            table_rows = connection.fetchall()
             
             logger.debug(f"Found {len(table_rows)} tables")
             
@@ -144,8 +132,8 @@ class InformixConnector(SqlConnector):
                 
                 try:
                     logger.debug(f"Getting columns for table {table_name}")
-                    cursor.execute(column_query)
-                    columns = cursor.fetchall()
+                    connection.execute(column_query)
+                    columns = connection.fetchall()
                     
                     if columns:
                         # Build columns list while logging each column's info
