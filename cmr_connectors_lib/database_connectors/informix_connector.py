@@ -12,7 +12,7 @@ class InformixConnector(SqlConnector):
         super().__init__(host, user, password, port, database)
         self.protocol = protocol
         self.locale = locale
-        self.driver_path = "app/main/drivers/libodbc.so"
+        self.driver_path = "app/main/drivers/ddifcl28.so"
 
     def construct_query(self, query, preview, rows):
         if preview:
@@ -37,8 +37,8 @@ class InformixConnector(SqlConnector):
          )
         logger.info(f"Connection string: {conn_str}")
         conn = pyodbc.connect(conn_str)
-        conn.setdecoding(pyodbc.SQL_CHAR, encoding="utf-8")
-        conn.setdecoding(pyodbc.SQL_WCHAR, encoding="utf-8")
+        # conn.setdecoding(pyodbc.SQL_CHAR, encoding="utf-8")
+        # conn.setdecoding(pyodbc.SQL_WCHAR, encoding="utf-8")
         return conn
 
     def ping(self):
