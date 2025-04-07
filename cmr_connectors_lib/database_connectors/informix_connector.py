@@ -12,7 +12,7 @@ class InformixConnector(SqlConnector):
         super().__init__(host, user, password, port, database)
         self.protocol = protocol
         self.locale = locale
-        self.driver = "ibm_db_sa"
+        self.driver = "db2+ibm_db"
 
     def construct_query(self, query, preview, rows):
         if preview:
