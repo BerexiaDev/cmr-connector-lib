@@ -7,6 +7,7 @@ from .sql_connector import SqlConnector
 from .sql_connector_utils import cast_informix_to_typescript_types
 from loguru import logger
 class InformixConnector(SqlConnector):
+    from sqlalchemy import create_engine
 
     def __init__(self, host, user, password, port, database, protocol, locale):
         super().__init__(host, user, password, port, database)
