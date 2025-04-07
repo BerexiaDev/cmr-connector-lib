@@ -8,10 +8,10 @@ from .sql_connector_utils import cast_informix_to_typescript_types
 from loguru import logger
 class InformixConnector(SqlConnector):
 
-    def __init__(self, host, user, password, port, database, protocol):
+    def __init__(self, host, user, password, port, database, protocol, locale):
         super().__init__(host, user, password, port, database)
         self.protocol = protocol
-        #TODO: Use custom path
+        self.locale = locale
         self.driver_path = "app/main/drivers/ddifcl28.so"
 
     def construct_query(self, query, preview, rows):
@@ -32,7 +32,10 @@ class InformixConnector(SqlConnector):
             f"PROTOCOL={self.protocol};"
             f"UID={self.user};"
             f"PWD={self.password};"
-        )
+            f"CLIENT_LOCALE={self.locale};"   # Explicitly set client locale
+            f"DB_LOCALE={self.locale};"       # Explicitly set database locale
+         )
+        logger.info(f"Connection string: {conn_str}")
         conn = pyodbc.connect(conn_str)
         conn.setdecoding(pyodbc.SQL_CHAR, encoding="utf-8")
         conn.setdecoding(pyodbc.SQL_WCHAR, encoding="utf-8")
