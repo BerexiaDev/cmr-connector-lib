@@ -59,6 +59,7 @@ def cast_informix_to_typescript_types(informix_type: int) -> str:
         27: "string",     # LVARCHAR (alternate variant)
         35: "string",     # IDSXML
         37: "string",     # IDSCHARSET
+        256: "string",    # IDSXML
         258: "string",    # IDSXML
         269: "string",    # VARCHAR with NOT NULL
         2061: "string",   # IDSSECURITYLABEL (security label string)
@@ -67,6 +68,7 @@ def cast_informix_to_typescript_types(informix_type: int) -> str:
         7: "Date",        # DATE
         10: "Date",       # DATETIME
         14: "string",     # INTERVAL (Duration, might need parsing)
+        263: "Date",      # DATE
         
         # Boolean types
         41: "boolean",    # BOOLEAN (newer Informix versions)
