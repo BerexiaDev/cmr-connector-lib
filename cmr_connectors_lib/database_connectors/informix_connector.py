@@ -37,8 +37,6 @@ class InformixConnector(SqlConnector):
          )
         logger.info(f"Connection string: {conn_str}")
         conn = pyodbc.connect(conn_str)
-        conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
-        conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
         return conn
 
     def ping(self):
