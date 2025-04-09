@@ -63,10 +63,15 @@ def cast_informix_to_typescript_types(informix_type: int) -> str:
         258: "string",    # IDSXML
         269: "string",    # VARCHAR with NOT NULL
         2061: "string",   # IDSSECURITYLABEL (security label string)
+        # Binary types
+        11: "string",     # BYTE (Binary data)
+        31: "string",     # BLOB
+        36: "string",     # IDSBLOB
+        
         
         # Date and time types
         7: "Date",        # DATE
-        10: "Date",       # DATETIME
+        10: "Datetime",       # DATETIME
         14: "string",     # INTERVAL (Duration, might need parsing)
         263: "Date",      # DATE
         
@@ -76,25 +81,21 @@ def cast_informix_to_typescript_types(informix_type: int) -> str:
         28: "boolean",    # BOOLEAN (alias/variant)
         32: "boolean",    # BOOLEAN (older versions)
         
-        # Binary types
-        11: "binary",     # BYTE (Binary data)
-        31: "binary",     # BLOB
-        36: "binary",     # IDSBLOB
         
         # Collection types
-        19: "string[]",   # SET (Unordered collection)
-        20: "string[]",   # MULTISET (May contain duplicates)
-        21: "string[]",   # LIST (Ordered collection)
-        23: "any[]",      # COLLECTION (General collection type)
+        19: "set",   # SET (Unordered collection)
+        20: "multiset",   # MULTISET (May contain duplicates)
+        21: "list",   # LIST (Ordered collection)
+        23: "list",      # COLLECTION (General collection type)
         
         # Record/Composite types
-        22: "Record<string, any>",  # ROW (Unnamed composite type)
-        24: "Record<string, any>",  # ROW (opaque UDT)
-        4117: "Record<string, any>", # ROW (opaque composite)
-        4118: "Record<string, any>", # ROW (Named composite type)
+        22: "record",  # ROW (Unnamed composite type)
+        24: "record",  # ROW (opaque UDT)
+        4117: "record", # ROW (opaque composite)
+        4118: "record", # ROW (Named composite type)
         
         # Special types
         9: "null",        # NULL (unspecified type)
     }
 
-    return informix_to_ts.get(informix_type, "unknown")  # Default to "unknown" if type is not listed
+    return informix_to_ts.get(informix_type, "string")  # Default to "string" if type is not listed
