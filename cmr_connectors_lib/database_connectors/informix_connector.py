@@ -3,9 +3,9 @@
 
 import pyodbc
 from typing import Dict
-from .sql_connector import SqlConnector
-from .sql_connector_utils import cast_informix_to_typescript_types
 from loguru import logger
+from .sql_connector import SqlConnector
+from .sql_connector_utils import cast_informix_to_typescript_types, cast_informix_to_postgresql_type
 class InformixConnector(SqlConnector):
 
     def __init__(self, host, user, password, port, database, protocol, locale):
@@ -180,3 +180,90 @@ class InformixConnector(SqlConnector):
         except Exception as e:
             logger.error(f"Error getting database schema: {str(e)}")
             raise ValueError(f"Failed to retrieve database schema: {str(e)}")
+        
+        
+    def extract_table_schema(self, table_name):
+        try:
+            query = f'''
+            SELECT 
+            c.colno AS ordinal_position,
+            c.colname,
+            c.coltype,
+            c.collength,
+            CASE 
+                WHEN BITAND(c.coltype, 256) = 256 THEN 'NO' 
+                ELSE 'YES' 
+            END AS is_nullable,
+            
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM sysconstraints sc
+                    JOIN sysindexes si ON sc.idxname = si.idxname
+                    WHERE sc.constrtype = 'P'
+                        AND sc.tabid = c.tabid
+                        AND (
+                            si.part1 = c.colno OR si.part2 = c.colno OR si.part3 = c.colno OR 
+                            si.part4 = c.colno OR si.part5 = c.colno OR si.part6 = c.colno OR 
+                            si.part7 = c.colno OR si.part8 = c.colno OR si.part9 = c.colno OR 
+                            si.part10 = c.colno OR si.part11 = c.colno OR si.part12 = c.colno OR 
+                            si.part13 = c.colno OR si.part14 = c.colno OR si.part15 = c.colno OR 
+                            si.part16 = c.colno
+                        )
+                ) THEN 'YES'
+                ELSE 'NO'
+            END AS is_primary_key,
+            
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM sysconstraints sc
+                    JOIN sysreferences sr ON sc.constrid = sr.constrid
+                    JOIN sysindexes si ON sc.idxname = si.idxname
+                    WHERE sc.constrtype = 'R'
+                        AND sc.tabid = c.tabid
+                        AND (
+                            si.part1 = c.colno OR si.part2 = c.colno OR si.part3 = c.colno OR 
+                            si.part4 = c.colno OR si.part5 = c.colno OR si.part6 = c.colno OR 
+                            si.part7 = c.colno OR si.part8 = c.colno OR si.part9 = c.colno OR 
+                            si.part10 = c.colno OR si.part11 = c.colno OR si.part12 = c.colno OR 
+                            si.part13 = c.colno OR si.part14 = c.colno OR si.part15 = c.colno OR 
+                            si.part16 = c.colno
+                        )
+                ) THEN 'YES'
+                ELSE 'NO'
+            END AS is_foreign_key,
+            
+            d.default AS default_value
+
+            FROM syscolumns c
+            JOIN systables t ON c.tabid = t.tabid
+            LEFT JOIN sysdefaults d ON c.tabid = d.tabid AND c.colno = d.colno
+            WHERE t.tabname = '{table_name}'
+            ORDER BY c.colno;
+            '''
+            
+            cursor = self.get_connection().cursor()
+            cursor.execute(query)
+            columns = cursor.fetchall()
+            cursor.close()
+            
+            column_list = []
+            for col in columns:
+                column_list.append({
+                    'position': col[0],
+                    'name': col[1],
+                    'type': cast_informix_to_postgresql_type(col[2]),
+                    'length': col[3],
+                    'nullable': col[4],
+                    'primary_key': col[5],
+                    'foreign_key': col[6],
+                    'default': col[7]
+                })
+            
+            return column_list
+        
+        except Exception as e:
+            logger.error(f"Error getting database schema: {str(e)}")
+            return {"status": "error", "message": f"An error occurred: {str(e)}"}, 500
+    
