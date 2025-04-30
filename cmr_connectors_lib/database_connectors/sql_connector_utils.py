@@ -1,5 +1,30 @@
 import sqlalchemy
 
+
+def safe_convert_to_string(value):
+    """
+    Safely convert a value to a string, handling UTF-8 encoding issues.
+    
+    Args:
+        value: The value to convert
+        
+    Returns:
+        str or None: The string representation of the value, or None if the value is None
+    """
+    if value is None:
+        return None
+        
+    try:
+        # Handle bytes objects by decoding them with UTF-8
+        if isinstance(value, bytes):
+            return value.decode('utf-8', errors='replace')
+        
+        # For other types, convert to string
+        return str(value)
+    except Exception as e:
+        return None
+
+
 def cast_sql_to_typescript_types(sa_type):
         # String types
         if isinstance(sa_type, (sqlalchemy.String, sqlalchemy.Unicode, sqlalchemy.Text,

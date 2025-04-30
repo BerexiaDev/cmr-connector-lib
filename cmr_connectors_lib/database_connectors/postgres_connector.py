@@ -21,6 +21,8 @@ class PostgresConnector(SqlConnector):
     def get_connection(self):
         return psycopg2.connect(host=self.host, user=self.user, password=self.password, port=self.port, dbname=self.database)
     
+
+    
     def create_schema_if_missing(self, schema_name: str):
         """Creates a schema in PostgreSQL if it doesn't exist."""
         with self.get_connection() as conn:

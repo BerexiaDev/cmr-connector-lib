@@ -5,7 +5,7 @@ import pyodbc
 from typing import Dict
 from loguru import logger
 from .sql_connector import SqlConnector
-from .sql_connector_utils import cast_informix_to_typescript_types, cast_informix_to_postgresql_type
+from .sql_connector_utils import cast_informix_to_typescript_types, cast_informix_to_postgresql_type, safe_convert_to_string
 class InformixConnector(SqlConnector):
 
     def __init__(self, host, user, password, port, database, protocol, locale):
@@ -54,6 +54,32 @@ class InformixConnector(SqlConnector):
         except Exception as e:
             logger.error(f"Database connection failed: {e}")
             return False
+    
+    
+    def extract_data_batch(self, table_name: str, offset: int = 0, limit: int = 100):
+        """
+           Extracts a batch of rows from an Informix table using SKIP/FIRST.
+           Defaults to the first 100 rows if offset/limit are not provided.
+        """
+        query = f'SELECT * FROM "{table_name}" SKIP {offset} FIRST {limit}'
+        logger.info(f"Fetching batch: table={table_name}, offset={offset}, limit={limit}")
+        
+        try:
+            connection = self.get_connection()
+            result_proxy = connection.execute(query)
+            rows = result_proxy.fetchall()
+            column_names = [col[0] for col in result_proxy.description]
+            batch_data = [
+                {col: safe_convert_to_string(row[i]) for i, col in enumerate(column_names)}
+                for row in rows
+            ]
+
+            return batch_data
+
+        except Exception as e:
+            logger.error(f"Error extracting batch from {table_name}: {str(e)}")
+            return [] 
+    
     
     def get_connection_tables(self):
         """Returns a list of all table names in the cmr database."""
