@@ -61,7 +61,7 @@ class InformixConnector(SqlConnector):
            Extracts a batch of rows from an Informix table using SKIP/FIRST.
            Defaults to the first 100 rows if offset/limit are not provided.
         """
-        query = f'SELECT SKIP {offset} FIRST {limit} "{table_name}"'
+        query = f'SELECT SKIP {offset} FIRST {limit} * FROM {table_name};'
         logger.info(f"Fetching batch: table={table_name}, offset={offset}, limit={limit}")
         
         try:
