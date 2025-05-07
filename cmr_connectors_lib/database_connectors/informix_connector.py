@@ -6,7 +6,7 @@ from typing import Dict, Any
 from loguru import logger
 from .sql_connector import SqlConnector
 from .sql_connector_utils import cast_informix_to_typescript_types, cast_informix_to_postgresql_type, safe_convert_to_string
-from utils.informix_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, \
+from cmr_connectors_lib.database_connectors.utils.informix_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, \
     _build_having_clause, _build_group_by
 
 

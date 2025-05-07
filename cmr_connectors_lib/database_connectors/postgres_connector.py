@@ -6,7 +6,7 @@ from typing import Dict, Any
 from .sql_connector import SqlConnector
 import psycopg2
 
-from utils.postgres_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, _build_group_by, \
+from cmr_connectors_lib.database_connectors.utils.postgres_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, _build_group_by, \
     _build_having_clause
 
 
