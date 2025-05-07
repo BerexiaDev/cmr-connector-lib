@@ -1,8 +1,17 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from asyncio.log import logger
+from typing import Dict, Any
+
 from .sql_connector import SqlConnector
 import psycopg2
+
+from cmr_connectors_lib.connectors_factory import ConnectorFactory
+from utils.postgres_connector_utils import load_single_table, process_select_fields, process_joins, \
+    process_where_conditions
+
+from sqlalchemy import MetaData, func, distinct, select, Select, and_, or_, Table, Column, not_, cast, String
+
 
 
 class PostgresConnector(SqlConnector):
@@ -82,3 +91,51 @@ class PostgresConnector(SqlConnector):
         columns_sql = ",\n  ".join(column_defs)
         create_stmt = f'CREATE TABLE IF NOT EXISTS "{schema_name}"."{table_name}" (\n  {columns_sql}\n);'
         return create_stmt
+
+
+    def build_query(data: Dict[str, Any], invert_where: bool = False, connector=None):
+        """
+        Parse the JSON definition and create a SQLAlchemy selectable (query).
+        """
+        if connector is None:
+            connector = {}
+        try:
+            # Step 1: Validate input data
+            if not bool(data and data.get('baseTable') and connector):
+                return None
+
+            # Step 2: Connect to database
+            factory = ConnectorFactory()
+            connection = factory.create_connector(connector.type, vars(connector))
+
+            # Step 4: Get and validate base table
+            base_table_name = data.get('baseTable')
+            base_table = load_single_table(connection, base_table_name, connector.database)
+
+            # Step 5: Process SELECT fields
+            selected_columns = process_select_fields(data, connection, base_table_name, connector.database)
+
+            # Step 6: Start building the SELECT statement
+            stmt = select(*selected_columns if selected_columns else '*').select_from(base_table)
+
+            # Step 7: Process JOINs
+            stmt = process_joins(connection, connector.database, data, stmt, base_table_name, base_table)
+
+            # Step 8: Process WHERE conditions
+            where_expressions = process_where_conditions(connection, connector.database, data)
+
+            if where_expressions:
+                if invert_where:
+                    # Opposite: NOT( condition1 AND condition2 AND ... )
+                    stmt = stmt.where(not_(and_(*where_expressions)))
+                else:
+                    # Exact: condition1 AND condition2 AND ...
+                    stmt = stmt.where(and_(*where_expressions))
+
+            # Step 9: Compile final query
+            compiled_stmt = stmt.compile(bind=connection.engine, compile_kwargs={"literal_binds": True})
+            query = str(compiled_stmt)
+            return query
+        except Exception as e:
+            logger.error(f"An error occurred while building query : {str(e)}")
+            return None
