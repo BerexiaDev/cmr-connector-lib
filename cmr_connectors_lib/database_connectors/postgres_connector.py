@@ -88,7 +88,7 @@ class PostgresConnector(SqlConnector):
         create_stmt = f'CREATE TABLE IF NOT EXISTS "{schema_name}"."{table_name}" (\n  {columns_sql}\n);'
         return create_stmt
 
-    def build_query(data: Dict[str, Any], invert_where: bool = False):
+    def build_query(self, data: Dict[str, Any], invert_where: bool = False):
         """
         Build an Informix SQL query based on the provided JSON definition.
         """
