@@ -6,7 +6,7 @@ from typing import Dict, Any
 from .sql_connector import SqlConnector
 import psycopg2
 
-from cmr_connectors_lib.connectors_factory import ConnectorFactory
+from ..connectors_factory import ConnectorFactory
 from utils.postgres_connector_utils import load_single_table, process_select_fields, process_joins, \
     process_where_conditions
 
