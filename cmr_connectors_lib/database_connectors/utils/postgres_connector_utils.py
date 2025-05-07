@@ -171,7 +171,7 @@ def _build_value_condition(
 
     # Regex
     if operator in (QueryOperator.MATCHES.value, QueryOperator.NOT_MATCHES.value):
-        return f"{field_expr} {operator} '{value}'"
+        return f"{field_expr} ~ '{value}'"
 
     # IN / NOT IN
     if operator in (QueryOperator.IN.value, QueryOperator.NOT_IN.value):

@@ -88,6 +88,110 @@ class PostgresConnector(SqlConnector):
         create_stmt = f'CREATE TABLE IF NOT EXISTS "{schema_name}"."{table_name}" (\n  {columns_sql}\n);'
         return create_stmt
 
+
+    def ping(self):
+        """Returns True if the connection is successful, False otherwise."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()  # Ensure the query runs
+            logger.info("Database connection is active.")
+            cursor.close()
+            return True
+        except Exception as e:
+            logger.error(f"Database connection failed: {e}")
+            return False
+
+
+    def get_connection_tables(self, schema='cmr_db'):
+        """
+        Returns a list of all table names in the given PostgreSQL schema.
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = %s
+                      AND table_type   = 'BASE TABLE';
+                    """,
+                    (self.database,),
+                )
+                # fetchall() returns list of tuples [(table1,), (table2,), …]
+                return [row[0] for row in cur.fetchall()]
+        finally:
+            conn.close()
+
+
+    def get_connection_columns(
+            self,
+            table_name: str,
+            schema: str = "cmr_db"
+    ):
+        """
+        Returns a list of dicts with column names and mapped TypeScript types
+        for the given Postgres table in the given schema.
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                      column_name,
+                      data_type,
+                      udt_name
+                    FROM information_schema.columns
+                    WHERE table_schema = %s
+                      AND table_name   = %s
+                    ORDER BY ordinal_position;
+                    """,
+                    (schema, table_name),
+                )
+                rows = cur.fetchall()
+
+            columns: list[dict[str, str]] = []
+            for column_name, data_type, udt_name in rows:
+                ts_type = self._map_postgres_to_typescript(data_type, udt_name)
+                columns.append({"name": column_name, "type": ts_type})
+            return columns
+
+        finally:
+            conn.close()
+
+    def _map_postgres_to_typescript(self, data_type: str, udt_name: str) -> str:
+        """
+        Simple mapping from Postgres data_type/udt_name to a TS type.
+        Extend this as needed.
+        """
+        mapping: dict[str, str] = {
+            "smallint": "number",
+            "integer": "number",
+            "bigint": "number",
+            "numeric": "number",
+            "real": "number",
+            "double precision": "number",
+            "boolean": "boolean",
+            "character varying": "string",
+            "character": "string",
+            "text": "string",
+            "date": "Date",
+            "timestamp without time zone": "Date",
+            "timestamp with time zone": "Date",
+            "time without time zone": "string",
+            "json": "any",
+            "jsonb": "any",
+            "uuid": "string",
+        }
+
+        if data_type == "USER-DEFINED":
+            return "string"
+
+        return mapping.get(data_type, "any")
+
     def build_query(self, data: Dict[str, Any], invert_where: bool = False):
         """
         Build an Informix SQL query based on the provided JSON definition.
