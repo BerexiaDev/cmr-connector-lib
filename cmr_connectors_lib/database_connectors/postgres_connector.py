@@ -6,12 +6,8 @@ from typing import Dict, Any
 from .sql_connector import SqlConnector
 import psycopg2
 
-from ..connectors_factory import ConnectorFactory
-from utils.postgres_connector_utils import load_single_table, process_select_fields, process_joins, \
-    process_where_conditions
-
-from sqlalchemy import MetaData, func, distinct, select, Select, and_, or_, Table, Column, not_, cast, String
-
+from utils.postgres_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, _build_group_by, \
+    _build_having_clause
 
 
 class PostgresConnector(SqlConnector):
@@ -92,50 +88,45 @@ class PostgresConnector(SqlConnector):
         create_stmt = f'CREATE TABLE IF NOT EXISTS "{schema_name}"."{table_name}" (\n  {columns_sql}\n);'
         return create_stmt
 
-
-    def build_query(data: Dict[str, Any], invert_where: bool = False, connector=None):
+    def build_query(data: Dict[str, Any], invert_where: bool = False):
         """
-        Parse the JSON definition and create a SQLAlchemy selectable (query).
+        Build an Informix SQL query based on the provided JSON definition.
         """
-        if connector is None:
-            connector = {}
         try:
             # Step 1: Validate input data
-            if not bool(data and data.get('baseTable') and connector):
+            base_table = data.get('baseTable')
+            if not base_table:
+                logger.error("Base table is required")
                 return None
 
-            # Step 2: Connect to database
-            factory = ConnectorFactory()
-            connection = factory.create_connector(connector.type, vars(connector))
+            # Step 4: Build the SELECT clause
+            select_clause = _build_select_clause(data.get('selectedFields', []))
 
-            # Step 4: Get and validate base table
-            base_table_name = data.get('baseTable')
-            base_table = load_single_table(connection, base_table_name, connector.database)
+            # Step 5: Build the FROM
+            from_clause = f"FROM {base_table}"
+            joins_clause = _build_joins_clause(base_table, data.get('joins', []))
 
-            # Step 5: Process SELECT fields
-            selected_columns = process_select_fields(data, connection, base_table_name, connector.database)
+            # Step 6: Build the WHERE clause
+            where_clause = _build_where_clause(data.get('whereConditions', []), invert_where)
 
-            # Step 6: Start building the SELECT statement
-            stmt = select(*selected_columns if selected_columns else '*').select_from(base_table)
+            # Step 7: Build the GROUP BY clause
+            group_by_clause = _build_group_by(data.get('groupByFields', []))
+            having_clause = _build_having_clause(data.get('having', []))
 
-            # Step 7: Process JOINs
-            stmt = process_joins(connection, connector.database, data, stmt, base_table_name, base_table)
+            # Combine clauses into a list
+            clauses = [
+                select_clause,
+                from_clause,
+                joins_clause,
+                where_clause,
+                group_by_clause,
+                having_clause
+            ]
 
-            # Step 8: Process WHERE conditions
-            where_expressions = process_where_conditions(connection, connector.database, data)
-
-            if where_expressions:
-                if invert_where:
-                    # Opposite: NOT( condition1 AND condition2 AND ... )
-                    stmt = stmt.where(not_(and_(*where_expressions)))
-                else:
-                    # Exact: condition1 AND condition2 AND ...
-                    stmt = stmt.where(and_(*where_expressions))
-
-            # Step 9: Compile final query
-            compiled_stmt = stmt.compile(bind=connection.engine, compile_kwargs={"literal_binds": True})
-            query = str(compiled_stmt)
+            # Join the clauses with a newline if the clause is not empty.
+            query = "\n".join(clause for clause in clauses if clause.strip())
             return query
+
         except Exception as e:
-            logger.error(f"An error occurred while building query : {str(e)}")
+            logger.error(f"Error building query: {str(e)}")
             return None
