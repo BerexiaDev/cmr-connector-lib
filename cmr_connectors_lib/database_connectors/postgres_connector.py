@@ -118,7 +118,7 @@ class PostgresConnector(SqlConnector):
                     WHERE table_schema = %s
                       AND table_type   = 'BASE TABLE';
                     """,
-                    (self.database,),
+                    (schema,),
                 )
                 # fetchall() returns list of tuples [(table1,), (table2,), …]
                 return [row[0] for row in cur.fetchall()]
