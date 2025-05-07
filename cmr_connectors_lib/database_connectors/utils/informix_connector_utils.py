@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from enums import SelectType, AggregationFunction, ColumnType, JoinType, ComparisonType, QueryOperator, DateUnit
+from cmr_connectors_lib.database_connectors.utils.enums import SelectType, AggregationFunction, ColumnType, JoinType, ComparisonType, QueryOperator, DateUnit
 
 
 def _build_select_clause(selected_fields: List[Dict[str, Any]]) -> str:
