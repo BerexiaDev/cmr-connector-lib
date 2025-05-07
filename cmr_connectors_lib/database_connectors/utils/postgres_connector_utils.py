@@ -1,6 +1,6 @@
 from typing import Dict, Any, List
 
-from cmr_connectors_lib.database_connectors.utils.emuns import QueryOperator, ComparisonType, HavingConditionType, DateUnit, ColumnType, \
+from .enums import QueryOperator, ComparisonType, HavingConditionType, DateUnit, ColumnType, \
     AggregationFunction
 from loguru import logger
 from sqlalchemy import MetaData, func, distinct, select, Select, and_, or_, Table, Column, not_, cast, String
