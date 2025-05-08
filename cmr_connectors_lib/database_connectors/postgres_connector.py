@@ -9,6 +9,7 @@ import psycopg2
 from cmr_connectors_lib.database_connectors.utils.postgres_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, _build_group_by, \
     _build_having_clause
 
+from cmr_connectors_lib.database_connectors.sql_connector_utils import cast_postgres_to_typescript
 
 class PostgresConnector(SqlConnector):
 
@@ -167,7 +168,7 @@ class PostgresConnector(SqlConnector):
 
             columns: list[dict[str, str]] = []
             for column_name, data_type, udt_name in rows:
-                ts_type = self._map_postgres_to_typescript(data_type, udt_name)
+                ts_type = cast_postgres_to_typescript(data_type, udt_name)
                 columns.append({"name": column_name, "type": ts_type})
             return columns
 
@@ -187,38 +188,6 @@ class PostgresConnector(SqlConnector):
         except Exception as e:
             logger.error(f"Error getting table total rows: {str(e)}")
             raise ValueError(f"Failed to get table total rows: {str(e)}")
-
-
-    def _map_postgres_to_typescript(self, data_type: str, udt_name: str) -> str:
-        """
-        Simple mapping from Postgres data_type/udt_name to a TS type.
-        Extend this as needed.
-        """
-        mapping: dict[str, str] = {
-            "smallint": "number",
-            "integer": "number",
-            "bigint": "number",
-            "numeric": "number",
-            "real": "number",
-            "double precision": "number",
-            "boolean": "boolean",
-            "character varying": "string",
-            "character": "string",
-            "text": "string",
-            "date": "Date",
-            "timestamp without time zone": "Datetime",
-            "timestamp with time zone": "Datetime",
-            "time without time zone": "string",
-            "json": "any",
-            "jsonb": "any",
-            "uuid": "string",
-        }
-
-        if data_type == "USER-DEFINED":
-            return "string"
-
-        return mapping.get(data_type, "any")
-
 
     def build_query(self, data: Dict[str, Any], invert_where: bool = False):
         """
