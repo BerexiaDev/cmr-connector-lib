@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-from asyncio.log import logger
+from loguru import logger
 from typing import Dict, Any
 
 from .sql_connector import SqlConnector
@@ -12,9 +12,10 @@ from cmr_connectors_lib.database_connectors.utils.postgres_connector_utils impor
 
 class PostgresConnector(SqlConnector):
 
-    def __init__(self, host, user, password, port, database):
+    def __init__(self, host, user, password, port, database, schema = 'public'):
         super().__init__(host, user, password, port, database)
         self.driver = "postgresql+psycopg2"
+        self.schema = schema
 
     def construct_query(self, query, preview, rows):
         if preview:
@@ -24,7 +25,19 @@ class PostgresConnector(SqlConnector):
         return query
     
     def get_connection(self):
-        return psycopg2.connect(host=self.host, user=self.user, password=self.password, port=self.port, dbname=self.database)
+        """Open a new psycopg2 connection.
+            If `schema` is provided, sets the search_path to '<schema>'.
+            """
+        conn_params = {
+            "host": self.host,
+            "user": self.user,
+            "password": self.password,
+            "port": self.port,
+            "dbname": self.database,
+            "options" : f"-c search_path={self.schema}"
+        }
+
+        return psycopg2.connect(**conn_params)
     
 
     
@@ -104,7 +117,7 @@ class PostgresConnector(SqlConnector):
             return False
 
 
-    def get_connection_tables(self, schema='cmr_db'):
+    def get_connection_tables(self):
         """
         Returns a list of all table names in the given PostgreSQL schema.
         """
@@ -118,7 +131,7 @@ class PostgresConnector(SqlConnector):
                     WHERE table_schema = %s
                       AND table_type   = 'BASE TABLE';
                     """,
-                    (schema,),
+                    (self.schema,),
                 )
                 # fetchall() returns list of tuples [(table1,), (table2,), …]
                 return [row[0] for row in cur.fetchall()]
@@ -128,8 +141,7 @@ class PostgresConnector(SqlConnector):
 
     def get_connection_columns(
             self,
-            table_name: str,
-            schema: str = "cmr_db"
+            table_name: str
     ):
         """
         Returns a list of dicts with column names and mapped TypeScript types
@@ -149,7 +161,7 @@ class PostgresConnector(SqlConnector):
                       AND table_name   = %s
                     ORDER BY ordinal_position;
                     """,
-                    (schema, table_name),
+                    (self.schema, table_name),
                 )
                 rows = cur.fetchall()
 
@@ -161,6 +173,21 @@ class PostgresConnector(SqlConnector):
 
         finally:
             conn.close()
+
+
+    def count_table_rows(self, table_name: str) -> int:
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+            count_result = cursor.fetchone()
+            total_count = int(count_result[0]) if count_result else 0
+            cursor.close()
+            return total_count
+        except Exception as e:
+            logger.error(f"Error getting table total rows: {str(e)}")
+            raise ValueError(f"Failed to get table total rows: {str(e)}")
+
 
     def _map_postgres_to_typescript(self, data_type: str, udt_name: str) -> str:
         """
@@ -179,8 +206,8 @@ class PostgresConnector(SqlConnector):
             "character": "string",
             "text": "string",
             "date": "Date",
-            "timestamp without time zone": "Date",
-            "timestamp with time zone": "Date",
+            "timestamp without time zone": "Datetime",
+            "timestamp with time zone": "Datetime",
             "time without time zone": "string",
             "json": "any",
             "jsonb": "any",
@@ -191,6 +218,7 @@ class PostgresConnector(SqlConnector):
             return "string"
 
         return mapping.get(data_type, "any")
+
 
     def build_query(self, data: Dict[str, Any], invert_where: bool = False):
         """
