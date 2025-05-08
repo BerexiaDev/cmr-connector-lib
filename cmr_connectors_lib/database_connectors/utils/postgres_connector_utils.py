@@ -170,8 +170,10 @@ def _build_value_condition(
         return f"{field_expr} LIKE '%{value}'"
 
     # Regex
-    if operator in (QueryOperator.MATCHES.value, QueryOperator.NOT_MATCHES.value):
+    if operator == QueryOperator.MATCHES.value:
         return f"{field_expr} ~ '{value}'"
+    elif operator == QueryOperator.NOT_MATCHES.value:
+        return f"{field_expr} !~ '{value}'"
 
     # IN / NOT IN
     if operator in (QueryOperator.IN.value, QueryOperator.NOT_IN.value):
