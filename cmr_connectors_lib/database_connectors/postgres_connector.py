@@ -13,7 +13,7 @@ from cmr_connectors_lib.database_connectors.sql_connector_utils import cast_post
 
 class PostgresConnector(SqlConnector):
 
-    def __init__(self, host, user, password, port, database, schema = 'public'):
+    def __init__(self, host, user, password, port, database, schema):
         super().__init__(host, user, password, port, database)
         self.driver = "postgresql+psycopg2"
         self.schema = schema
