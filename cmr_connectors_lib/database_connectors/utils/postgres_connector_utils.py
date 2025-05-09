@@ -250,7 +250,7 @@ def _format_value(value: Any, field_type: str) -> str:
         return ''
 
     if field_type == ColumnType.Date.value:
-        return f"'{value}'::DATE"
+        return f"'{value}'"
     if field_type == ColumnType.Datetime.value:
         return f"'{value}'"
     if field_type == ColumnType.Boolean.value:
