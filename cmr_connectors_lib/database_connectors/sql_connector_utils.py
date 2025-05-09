@@ -196,3 +196,56 @@ def cast_informix_to_postgresql_type(informix_type: int) -> str:
 
     base_type = informix_type % 256
     return informix_to_pg.get(base_type, "TEXT")
+
+
+
+def cast_postgres_to_typescript(self, data_type: str) -> str:
+    """
+    Simple mapping from Postgres data_type/udt_name to a TS type.
+    Extend this as needed.
+    """
+    mapping: dict[str, str] = {
+        # numeric types
+        "smallint": "number",
+        "integer": "number",
+        "bigint": "number",
+        "numeric": "number",
+        "decimal": "number",
+        "real": "number",
+        "smallserial": "number",
+        "serial": "number",
+        "bigserial": "number",
+        "money": "string",
+        "double precision": "number",
+
+        # character types
+        "character varying": "string",
+        "varchar": "string",
+        "character": "string",
+        "char": "string",
+        "text": "string",
+        "citext": "string",
+
+        # boolean
+        "boolean": "boolean",
+        "bool": "boolean",
+
+         # date/time
+        "date": "Date",
+        "time": "string",
+        "time without time zone": "string",
+        "time with time zone": "string",
+        "timestamp": "Date",
+        "timestamp without time zone": "Date",
+        "timestamp with time zone":    "Date",
+        "interval":                 "string",
+
+        "json": "any",
+        "jsonb": "any",
+        "uuid": "string",
+    }
+
+    if data_type == "USER-DEFINED":
+        return "string"
+
+    return mapping.get(data_type, "any")

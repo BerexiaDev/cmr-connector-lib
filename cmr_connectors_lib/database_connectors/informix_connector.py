@@ -2,10 +2,14 @@
 # -*- coding: utf-8 -*-
 
 import pyodbc
-from typing import Dict
+from typing import Dict, Any
 from loguru import logger
 from .sql_connector import SqlConnector
 from .sql_connector_utils import cast_informix_to_typescript_types, cast_informix_to_postgresql_type, safe_convert_to_string
+from cmr_connectors_lib.database_connectors.utils.informix_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, \
+    _build_having_clause, _build_group_by
+
+
 class InformixConnector(SqlConnector):
 
     def __init__(self, host, user, password, port, database, protocol, locale):
@@ -292,4 +296,47 @@ class InformixConnector(SqlConnector):
         except Exception as e:
             logger.error(f"Error getting database schema: {str(e)}")
             return {"status": "error", "message": f"An error occurred: {str(e)}"}, 500
-    
+
+
+    def build_query(self, data: Dict[str, Any], invert_where: bool = False):
+        """
+        Build an Informix SQL query based on the provided JSON definition.
+        """
+        try:
+            # Step 1: Validate input data
+            base_table = data.get('baseTable')
+            if not base_table:
+                logger.error("Base table is required")
+                return None
+
+            # Step 4: Build the SELECT clause
+            select_clause = _build_select_clause(data.get('selectedFields', []))
+
+            # Step 5: Build the FROM
+            from_clause = f"FROM {base_table}"
+            joins_clause = _build_joins_clause(base_table, data.get('joins', []))
+
+            # Step 6: Build the WHERE clause
+            where_clause = _build_where_clause(data.get('whereConditions', []), invert_where)
+
+            # Step 7: Build the GROUP BY clause
+            group_by_clause = _build_group_by(data.get('groupByFields', []))
+            having_clause = _build_having_clause(data.get('having', []))
+
+            # Combine clauses into a list
+            clauses = [
+                select_clause,
+                from_clause,
+                joins_clause,
+                where_clause,
+                group_by_clause,
+                having_clause
+            ]
+
+            # Join the clauses with a newline if the clause is not empty.
+            query = "\n".join(clause for clause in clauses if clause.strip())
+            return query
+
+        except Exception as e:
+            logger.error(f"Error building query: {str(e)}")
+            return None

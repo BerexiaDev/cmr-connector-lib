@@ -1,15 +1,22 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-from asyncio.log import logger
+from loguru import logger
+from typing import Dict, Any
+
 from .sql_connector import SqlConnector
 import psycopg2
 
+from cmr_connectors_lib.database_connectors.utils.postgres_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, _build_group_by, \
+    _build_having_clause
+
+from cmr_connectors_lib.database_connectors.sql_connector_utils import cast_postgres_to_typescript
 
 class PostgresConnector(SqlConnector):
 
-    def __init__(self, host, user, password, port, database):
+    def __init__(self, host, user, password, port, database, schema):
         super().__init__(host, user, password, port, database)
         self.driver = "postgresql+psycopg2"
+        self.schema = schema
 
     def construct_query(self, query, preview, rows):
         if preview:
@@ -19,7 +26,19 @@ class PostgresConnector(SqlConnector):
         return query
     
     def get_connection(self):
-        return psycopg2.connect(host=self.host, user=self.user, password=self.password, port=self.port, dbname=self.database)
+        """Open a new psycopg2 connection.
+            If `schema` is provided, sets the search_path to '<schema>'.
+            """
+        conn_params = {
+            "host": self.host,
+            "user": self.user,
+            "password": self.password,
+            "port": self.port,
+            "dbname": self.database,
+            "options" : f"-c search_path={self.schema}"
+        }
+
+        return psycopg2.connect(**conn_params)
     
 
     
@@ -82,3 +101,133 @@ class PostgresConnector(SqlConnector):
         columns_sql = ",\n  ".join(column_defs)
         create_stmt = f'CREATE TABLE IF NOT EXISTS "{schema_name}"."{table_name}" (\n  {columns_sql}\n);'
         return create_stmt
+
+
+    def ping(self):
+        """Returns True if the connection is successful, False otherwise."""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()  # Ensure the query runs
+            logger.info("Database connection is active.")
+            cursor.close()
+            return True
+        except Exception as e:
+            logger.error(f"Database connection failed: {e}")
+            return False
+
+
+    def get_connection_tables(self):
+        """
+        Returns a list of all table names in the given PostgreSQL schema.
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = %s
+                      AND table_type   = 'BASE TABLE';
+                    """,
+                    (self.schema,),
+                )
+                # fetchall() returns list of tuples [(table1,), (table2,), …]
+                return [row[0] for row in cur.fetchall()]
+        finally:
+            conn.close()
+
+
+    def get_connection_columns(
+            self,
+            table_name: str
+    ):
+        """
+        Returns a list of dicts with column names and mapped TypeScript types
+        for the given Postgres table in the given schema.
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                      column_name,
+                      data_type,
+                      udt_name
+                    FROM information_schema.columns
+                    WHERE table_schema = %s
+                      AND table_name   = %s
+                    ORDER BY ordinal_position;
+                    """,
+                    (self.schema, table_name),
+                )
+                rows = cur.fetchall()
+
+            columns: list[dict[str, str]] = []
+            for column_name, data_type, udt_name in rows:
+                ts_type = cast_postgres_to_typescript(data_type, udt_name)
+                columns.append({"name": column_name, "type": ts_type})
+            return columns
+
+        finally:
+            conn.close()
+
+
+    def count_table_rows(self, table_name: str) -> int:
+        try:
+            connection = self.get_connection()
+            cursor = connection.cursor()
+            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+            count_result = cursor.fetchone()
+            total_count = int(count_result[0]) if count_result else 0
+            cursor.close()
+            return total_count
+        except Exception as e:
+            logger.error(f"Error getting table total rows: {str(e)}")
+            raise ValueError(f"Failed to get table total rows: {str(e)}")
+
+    def build_query(self, data: Dict[str, Any], invert_where: bool = False):
+        """
+        Build an Informix SQL query based on the provided JSON definition.
+        """
+        try:
+            # Step 1: Validate input data
+            base_table = data.get('baseTable')
+            if not base_table:
+                logger.error("Base table is required")
+                return None
+
+            # Step 4: Build the SELECT clause
+            select_clause = _build_select_clause(data.get('selectedFields', []))
+
+            # Step 5: Build the FROM
+            from_clause = f"FROM {base_table}"
+            joins_clause = _build_joins_clause(base_table, data.get('joins', []))
+
+            # Step 6: Build the WHERE clause
+            where_clause = _build_where_clause(data.get('whereConditions', []), invert_where)
+
+            # Step 7: Build the GROUP BY clause
+            group_by_clause = _build_group_by(data.get('groupByFields', []))
+            having_clause = _build_having_clause(data.get('having', []))
+
+            # Combine clauses into a list
+            clauses = [
+                select_clause,
+                from_clause,
+                joins_clause,
+                where_clause,
+                group_by_clause,
+                having_clause
+            ]
+
+            # Join the clauses with a newline if the clause is not empty.
+            query = "\n".join(clause for clause in clauses if clause.strip())
+            return query
+
+        except Exception as e:
+            logger.error(f"Error building query: {str(e)}")
+            return None
