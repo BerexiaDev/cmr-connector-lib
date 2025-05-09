@@ -252,7 +252,7 @@ def _format_value(value: Any, field_type: str) -> str:
     if field_type == ColumnType.Date.value:
         return f"'{value}'::DATE"
     if field_type == ColumnType.Datetime.value:
-        return f"'{value}'::TIMESTAMP"
+        return f"'{value}'"
     if field_type == ColumnType.Boolean.value:
         return "TRUE" if value else "FALSE"
     if field_type == ColumnType.Number.value:
@@ -264,7 +264,7 @@ def _format_value(value: Any, field_type: str) -> str:
     ):
         # e.g. ARRAY['a','b','c']
         items = ", ".join(f"'{v}'" for v in value)
-        return f"ARRAY[{items}]"
+        return f"{items}"
 
     # Default: quote and escape strings
     if isinstance(value, str):
