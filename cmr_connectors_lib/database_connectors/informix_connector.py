@@ -32,7 +32,7 @@ class InformixConnector(SqlConnector):
         """
         # Build the URL; extra params go after ? as query string
         url = (
-            f"db2+ibm_db://{self.user}:{self.password}"
+            f"ibm_db_sa://{self.user}:{self.password}"
             f"@{self.host}:{self.port}/{self.database};"
             f"&CLIENT_LOCALE={self.locale}"
             f"&DB_LOCALE={self.locale}"
@@ -46,7 +46,6 @@ class InformixConnector(SqlConnector):
         try:
             with self.get_connection() as conn:
                 result = conn.execute(text("SELECT 1"))
-                logger.debug(f"results => {result}")
                 # scalar() fetches the first column of the first row
                 if result.scalar() == 1:
                     logger.info("Database connection is active.")
@@ -107,8 +106,7 @@ class InformixConnector(SqlConnector):
             return batch
 
         except Exception as exc:
-            logger.error("Error extracting batch from %s: %s",
-                         table_name, exc)
+            logger.error(f"Error extracting batch from {table_name}: {exc}")
             return []
     
     
