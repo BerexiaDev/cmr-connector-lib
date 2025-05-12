@@ -29,7 +29,7 @@ class InformixConnector(SqlConnector):
     def get_connection(self):
         """Returns a connection object from the driver."""
         conn_str = (
-            f"DRIVER={self.driver_path};"
+            "DRIVER={IBM INFORMIX ODBC DRIVER};"
             f"DATABASE={self.database};"
             f"HOSTNAME={self.host};"
             f"PORT={self.port};"
