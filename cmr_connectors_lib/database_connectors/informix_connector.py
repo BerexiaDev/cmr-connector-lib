@@ -8,7 +8,7 @@ from .sql_connector import SqlConnector
 from .sql_connector_utils import cast_informix_to_typescript_types, cast_informix_to_postgresql_type, safe_convert_to_string
 from cmr_connectors_lib.database_connectors.utils.informix_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, \
     _build_having_clause, _build_group_by
-
+from sqlalchemy import create_engine
 
 class InformixConnector(SqlConnector):
 
@@ -27,23 +27,20 @@ class InformixConnector(SqlConnector):
         return query
 
     def get_connection(self):
-        """Returns a connection object from the driver."""
-        conn_str = (
-            "DRIVER={IBM INFORMIX ODBC DRIVER};"
-            f"DATABASE={self.database};"
-            f"HOSTNAME={self.host};"
-            f"PORT={self.port};"
-            f"PROTOCOL={self.protocol};"
-            f"UID={self.user};"
-            f"PWD={self.password};"
-            f"CLIENT_LOCALE={self.locale};"   # Explicitly set client locale
-            f"DB_LOCALE={self.locale};"       # Explicitly set database locale
-         )
-        conn = pyodbc.connect(conn_str)
-        # Set decoding to ISO-8859-1 (en_US.819) for both SQL_CHAR and SQL_WCHAR
-        conn.setdecoding(pyodbc.SQL_CHAR, encoding='latin1')  # ISO-8859-1 = Latin-1
-        conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')  # In case of wide chars
-        return conn
+        """
+        Returns a SQLAlchemy Connection object using the Informix dialect.
+        """
+        # Build the URL; extra params go after ? as query string
+        url = (
+            f"informix+ibm_db_sa://{self.user}:{self.password}"
+            f"@{self.host}:{self.port}/{self.database}"
+            f"?INFORMIXSERVER={self.server}"
+            f"&CLIENT_LOCALE={self.locale}"
+            f"&DB_LOCALE={self.locale}"
+        )
+
+        engine = create_engine(url, echo=False)  # echo=True for SQL logging
+        return engine.connect()
 
     def ping(self):
         """Returns True if the connection is successful, False otherwise."""
