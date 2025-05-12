@@ -61,19 +61,7 @@ class InformixConnector(SqlConnector):
             offset: int = 0,
             limit: int = 100
     ):
-        """
-        Récupère un lot de lignes depuis une table Informix à l’aide de SKIP/FIRST.
-        Par défaut : 100 lignes à partir du début.
 
-        Args:
-            table_name: Nom de la table (sans guillemets).
-            offset: Nombre de lignes à ignorer (>= 0).
-            limit: Nombre de lignes à retourner (> 0).
-
-        Returns:
-            Liste de dictionnaires {colonne: valeur}.
-            Retourne [] en cas d’erreur ou si aucune ligne.
-        """
         # Sécurité minimale sur les bornes
         offset = max(0, int(offset))
         limit = max(1, int(limit))
@@ -92,9 +80,6 @@ class InformixConnector(SqlConnector):
                     {col: safe_convert_to_string(val) for col, val in row.items()}
                     for row in result
                 ]
-
-
-            logger.debug(f"batch => {batch}")
 
             return batch
 
