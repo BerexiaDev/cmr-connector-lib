@@ -93,12 +93,16 @@ class InformixConnector(SqlConnector):
 
                 # noms des colonnes
                 col_names = result.keys()
+                logger.debug(f"col_names => {col_names}")
 
                 # conversion -> list[dict]
                 batch = [
                     {col: safe_convert_to_string(row[col]) for col in col_names}
                     for row in result
                 ]
+
+
+            logger.debug(f"batch => {batch}")
 
             return batch
 
