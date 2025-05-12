@@ -33,12 +33,10 @@ class InformixConnector(SqlConnector):
         # Build the URL; extra params go after ? as query string
         url = (
             f"ibm_db_sa://{self.user}:{self.password}"
-            f"@{self.host}:{self.port}/{self.database};"
-            f"&CLIENT_LOCALE={self.locale}"
-            f"&DB_LOCALE={self.locale}"
+            f"@{self.host}:{self.port}/{self.database}"
         )
 
-        engine = create_engine("ibm_db_sa://informix:mysecretpassword@host.docker.internal:9089/cmr_db")  # echo=True for SQL logging
+        engine = create_engine(url)  # echo=True for SQL logging
         return engine.connect()
 
     def ping(self) -> bool:
@@ -81,7 +79,7 @@ class InformixConnector(SqlConnector):
         limit = max(1, int(limit))
 
         # Construire la requête ; pas de « ; » final pour Informix
-        sql = text(f'SELECT SKIP {offset} FIRST {limit} * FROM "{table_name}"')
+        sql = text(f'SELECT SKIP {offset} FIRST {limit} * FROM {table_name}')
 
         logger.info("Fetching batch – table=%s | offset=%s | limit=%s",
                     table_name, offset, limit)
