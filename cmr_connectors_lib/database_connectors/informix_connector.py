@@ -57,31 +57,55 @@ class InformixConnector(SqlConnector):
         except Exception as e:
             logger.error(f"Database connection failed: {str(e)}")
             return False
-    
-    
-    def extract_data_batch(self, table_name: str, offset: int = 0, limit: int = 100):
+
+    def extract_data_batch(
+            self,
+            table_name: str,
+            offset: int = 0,
+            limit: int = 100
+    ):
         """
-           Extracts a batch of rows from an Informix table using SKIP/FIRST.
-           Defaults to the first 100 rows if offset/limit are not provided.
+        Récupère un lot de lignes depuis une table Informix à l’aide de SKIP/FIRST.
+        Par défaut : 100 lignes à partir du début.
+
+        Args:
+            table_name: Nom de la table (sans guillemets).
+            offset: Nombre de lignes à ignorer (>= 0).
+            limit: Nombre de lignes à retourner (> 0).
+
+        Returns:
+            Liste de dictionnaires {colonne: valeur}.
+            Retourne [] en cas d’erreur ou si aucune ligne.
         """
-        query = f'SELECT SKIP {offset} FIRST {limit} * FROM {table_name};'
-        logger.info(f"Fetching batch: table={table_name}, offset={offset}, limit={limit}")
-        
+        # Sécurité minimale sur les bornes
+        offset = max(0, int(offset))
+        limit = max(1, int(limit))
+
+        # Construire la requête ; pas de « ; » final pour Informix
+        sql = text(f'SELECT SKIP {offset} FIRST {limit} * FROM "{table_name}"')
+
+        logger.info("Fetching batch – table=%s | offset=%s | limit=%s",
+                    table_name, offset, limit)
+
         try:
-            connection = self.get_connection()
-            result_proxy = connection.execute(query)
-            rows = result_proxy.fetchall()
-            column_names = [col[0] for col in result_proxy.description]
-            batch_data = [
-                {col: safe_convert_to_string(row[i]) for i, col in enumerate(column_names)}
-                for row in rows
-            ]
+            with self.get_connection() as conn:
+                result = conn.execute(sql)
 
-            return batch_data
+                # noms des colonnes
+                col_names = result.keys()
 
-        except Exception as e:
-            logger.error(f"Error extracting batch from {table_name}: {str(e)}")
-            return [] 
+                # conversion -> list[dict]
+                batch = [
+                    {col: safe_convert_to_string(row[col]) for col in col_names}
+                    for row in result
+                ]
+
+            return batch
+
+        except Exception as exc:
+            logger.error("Error extracting batch from %s: %s",
+                         table_name, exc)
+            return []
     
     
     def get_connection_tables(self):
@@ -272,7 +296,7 @@ class InformixConnector(SqlConnector):
             ORDER BY c.colno;
             '''
             
-            cursor = self.get_connection().cursor()
+            cursor = self.get_connection()
             cursor.execute(query)
             columns = cursor.fetchall()
             cursor.close()
