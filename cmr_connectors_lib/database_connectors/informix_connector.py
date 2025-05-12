@@ -297,8 +297,7 @@ class InformixConnector(SqlConnector):
             '''
             
             cursor = self.get_connection()
-            cursor.execute(query)
-            columns = cursor.fetchall()
+            columns = cursor.execute(text(query)).fetchall()
             cursor.close()
             
             column_list = []
