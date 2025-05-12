@@ -8,7 +8,7 @@ from .sql_connector import SqlConnector
 from .sql_connector_utils import cast_informix_to_typescript_types, cast_informix_to_postgresql_type, safe_convert_to_string
 from cmr_connectors_lib.database_connectors.utils.informix_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, \
     _build_having_clause, _build_group_by
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 class InformixConnector(SqlConnector):
 
@@ -32,28 +32,30 @@ class InformixConnector(SqlConnector):
         """
         # Build the URL; extra params go after ? as query string
         url = (
-            f"informix+ibm_db_sa://{self.user}:{self.password}"
-            f"@{self.host}:{self.port}/{self.database}"
-            f"?INFORMIXSERVER={self.server}"
+            f"db2+ibm_db://{self.user}:{self.password}"
+            f"@{self.host}:{self.port}/{self.database};"
             f"&CLIENT_LOCALE={self.locale}"
             f"&DB_LOCALE={self.locale}"
         )
 
-        engine = create_engine(url, echo=False)  # echo=True for SQL logging
+        engine = create_engine("ibm_db_sa://informix:mysecretpassword@host.docker.internal:9089/cmr_db")  # echo=True for SQL logging
         return engine.connect()
 
-    def ping(self):
+    def ping(self) -> bool:
         """Returns True if the connection is successful, False otherwise."""
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1")
-            cursor.fetchone()  # Ensure the query runs
-            logger.info("Database connection is active.")
-            cursor.close()
-            return True
+            with self.get_connection() as conn:
+                result = conn.execute(text("SELECT 1"))
+                logger.debug(f"results => {result}")
+                # scalar() fetches the first column of the first row
+                if result.scalar() == 1:
+                    logger.info("Database connection is active.")
+                    return True
+                else:
+                    logger.warning("Ping query did not return expected result.")
+                    return False
         except Exception as e:
-            logger.error(f"Database connection failed: {e}")
+            logger.error(f"Database connection failed: {str(e)}")
             return False
     
     
