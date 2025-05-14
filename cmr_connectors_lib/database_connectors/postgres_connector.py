@@ -3,6 +3,8 @@
 from loguru import logger
 from typing import Dict, Any
 
+from pyodbc import Cursor
+
 from .sql_connector import SqlConnector
 import psycopg2
 
@@ -230,4 +232,26 @@ class PostgresConnector(SqlConnector):
 
         except Exception as e:
             logger.error(f"Error building query: {str(e)}")
+            return None
+
+    def fetch_batch(self, cursor: Cursor, table_name, offset: int, limit: int = 100):
+        """
+          Fetch up to `limit` rows from `table`, skipping the first `offset` rows.
+
+        Args:
+            table_name (str):       Name of the Informix table.
+            offset (int):      Number of rows to skip.
+            limit (int):       Maximum rows to return.
+            cursor:            An Informix cursor.
+
+        Returns:
+            list of tuple:     The fetched rows, empty if none remain.
+        """
+        try:
+            query = f'SELECT * FROM {table_name} OFFSET {offset} LIMIT {limit}'
+            cursor.execute(query)
+            results = cursor.fetchall()
+            return results
+        except Exception as e:
+            logger.error(f"Error fetching batch from {table_name}: {str(e)}")
             return None

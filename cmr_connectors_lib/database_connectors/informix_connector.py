@@ -4,6 +4,8 @@
 import pyodbc
 from typing import Dict, Any
 from loguru import logger
+from pyodbc import Cursor
+
 from .sql_connector import SqlConnector
 from .sql_connector_utils import cast_informix_to_typescript_types, cast_informix_to_postgresql_type, safe_convert_to_string
 from cmr_connectors_lib.database_connectors.utils.informix_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, \
@@ -82,9 +84,31 @@ class InformixConnector(SqlConnector):
 
         except Exception as e:
             logger.error(f"Error extracting batch from {table_name}: {str(e)}")
-            return [] 
-    
-    
+            return []
+
+
+    def fetch_batch(self, cursor: Cursor, table_name, offset: int, limit: int = 100):
+        """
+          Fetch up to `limit` rows from `table`, skipping the first `offset` rows.
+
+        Args:
+            table_name (str):       Name of the Informix table.
+            offset (int):      Number of rows to skip.
+            limit (int):       Maximum rows to return.
+            cursor:            An Informix cursor.
+
+        Returns:
+            list of tuple:     The fetched rows, empty if none remain.
+        """
+        try:
+            query = f'SELECT SKIP {offset} FIRST {limit} * FROM {table_name}'
+            cursor.execute(query)
+            results = cursor.fetchall()
+            return results
+        except Exception as e:
+            logger.error(f"Error fetching batch from {table_name}: {str(e)}")
+            return None
+
     def get_connection_tables(self):
         """Returns a list of all table names in the cmr database."""
         cursor = self.get_connection().cursor()
