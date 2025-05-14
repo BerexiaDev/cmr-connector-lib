@@ -49,24 +49,11 @@ class SqlConnector(Connector):
         inspector = inspect(engine)
         return inspector.get_table_names()
     
-    def get_connection_columns(self, table_name: str):
-        """
-        Returns a list of all column names in the table.
-        Supports schema-qualified table names like 'schema.table'.
-        """
+    def get_connection_columns(self, table_name):
+        """Returns a list of all column names in the table."""
         engine = self.get_engine()
         inspector = inspect(engine)
-
-        # Handle schema-qualified names
-        if '.' in table_name:
-            schema, table = table_name.split('.', 1)
-        else:
-            schema, table = None, table_name
-
-        columns = [
-            {'name': col['name'], 'type': cast_sql_to_typescript_types(col['type'])}
-            for col in inspector.get_columns(table, schema=schema)
-        ]
+        columns = [{'name': col['name'], 'type': cast_sql_to_typescript_types(col['type'])} for col in inspector.get_columns(table_name)]
         return columns
 
     def get_df(self, query, preview=False, rows=10, *args, **kwargs):
