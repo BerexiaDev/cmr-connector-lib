@@ -144,11 +144,16 @@ class PostgresConnector(SqlConnector):
 
     def get_connection_columns(
             self,
-            table_name: str
+            table_name: str,
+            schema: str = "public"
     ):
         """
         Returns a list of dicts with column names and mapped TypeScript types
         for the given Postgres table in the given schema.
+        
+        Args:
+            table_name: The name of the table to get columns for
+            schema: Schema name, defaults to "public"
         """
         conn = self.get_connection()
         try:
@@ -164,7 +169,7 @@ class PostgresConnector(SqlConnector):
                       AND table_name   = %s
                     ORDER BY ordinal_position;
                     """,
-                    (self.schema, table_name),
+                    (schema, table_name),
                 )
                 rows = cur.fetchall()
 
