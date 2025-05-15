@@ -1,5 +1,30 @@
 import sqlalchemy
 
+
+def safe_convert_to_string(value):
+    """
+    Safely convert a value to a string, handling UTF-8 encoding issues.
+    
+    Args:
+        value: The value to convert
+        
+    Returns:
+        str or None: The string representation of the value, or None if the value is None
+    """
+    if value is None:
+        return None
+        
+    try:
+        # Handle bytes objects by decoding them with UTF-8
+        if isinstance(value, bytes):
+            return value.decode('utf-8', errors='replace')
+        
+        # For other types, convert to string
+        return str(value)
+    except Exception as e:
+        return None
+
+
 def cast_sql_to_typescript_types(sa_type):
         # String types
         if isinstance(sa_type, (sqlalchemy.String, sqlalchemy.Unicode, sqlalchemy.Text,
@@ -98,3 +123,129 @@ def cast_informix_to_typescript_types(informix_type: int) -> str:
     }
 
     return informix_to_ts.get(informix_type, "unknown")  # Default to "unknown" if type is not listed
+
+
+def cast_informix_to_postgresql_type(informix_type: int) -> str:
+    """Maps Informix coltype (MOD(coltype, 256)) to PostgreSQL data types."""
+    informix_to_pg = {
+        # Numeric types
+        1: "SMALLINT",        # SMALLINT
+        2: "INTEGER",         # INTEGER
+        3: "DOUBLE PRECISION",# FLOAT
+        4: "REAL",            # SMALLFLOAT
+        5: "DECIMAL",         # DECIMAL(p,s)
+        6: "SERIAL",          # SERIAL (Auto-increment)
+        8: "NUMERIC",         # MONEY
+        17: "BIGINT",         # INT8
+        18: "BIGSERIAL",      # SERIAL8
+        52: "BIGINT",         # BIGINT
+        53: "BIGSERIAL",      # BIGSERIAL
+        25: "INTEGER",        # REFSERIAL
+        26: "BIGINT",         # REFSERIAL8
+        262: "INTEGER",       # DISTINCT type based on INT
+
+        # Character/String types
+        0: "CHAR",            # CHAR(n)
+        12: "TEXT",           # TEXT
+        13: "VARCHAR",        # VARCHAR(n)
+        15: "CHAR",           # NCHAR
+        16: "VARCHAR",        # NVARCHAR
+        40: "VARCHAR",        # LVARCHAR
+        42: "TEXT",           # CLOB
+        43: "VARCHAR",        # LVARCHAR client-side only
+        27: "VARCHAR",        # LVARCHAR variant
+        35: "TEXT",           # IDSXML
+        37: "TEXT",           # IDSCHARSET
+        256: "TEXT",          # IDSXML variant
+        258: "TEXT",          # IDSXML variant
+        269: "VARCHAR",       # VARCHAR NOT NULL
+        2061: "TEXT",         # IDSSECURITYLABEL
+
+        # Date/Time types
+        7: "DATE",            # DATE
+        10: "TIMESTAMP",      # DATETIME
+        14: "INTERVAL",       # INTERVAL
+        263: "DATE",          # DATE (variant)
+
+        # Boolean types
+        41: "BOOLEAN",        # BOOLEAN
+        45: "BOOLEAN",        # BOOLEAN
+        28: "BOOLEAN",        # BOOLEAN
+        32: "BOOLEAN",        # BOOLEAN
+
+        # Binary types
+        11: "BYTEA",          # BYTE (binary)
+        31: "BYTEA",          # BLOB
+        36: "BYTEA",          # IDSBLOB
+
+        # Collections
+        19: "TEXT[]",         # SET
+        20: "TEXT[]",         # MULTISET
+        21: "TEXT[]",         # LIST
+        23: "JSONB",          # COLLECTION (could vary)
+
+        # Composite types
+        22: "JSONB",          # ROW (unnamed)
+        24: "JSONB",          # ROW (opaque UDT)
+        4117: "JSONB",        # ROW (opaque composite)
+        4118: "JSONB",        # ROW (named composite)
+
+        # Special
+        9: "TEXT"             # NULL / unspecified
+    }
+
+    base_type = informix_type % 256
+    return informix_to_pg.get(base_type, "TEXT")
+
+
+
+def cast_postgres_to_typescript(self, data_type: str) -> str:
+    """
+    Simple mapping from Postgres data_type/udt_name to a TS type.
+    Extend this as needed.
+    """
+    mapping: dict[str, str] = {
+        # numeric types
+        "smallint": "number",
+        "integer": "number",
+        "bigint": "number",
+        "numeric": "number",
+        "decimal": "number",
+        "real": "number",
+        "smallserial": "number",
+        "serial": "number",
+        "bigserial": "number",
+        "money": "string",
+        "double precision": "number",
+
+        # character types
+        "character varying": "string",
+        "varchar": "string",
+        "character": "string",
+        "char": "string",
+        "text": "string",
+        "citext": "string",
+
+        # boolean
+        "boolean": "boolean",
+        "bool": "boolean",
+
+         # date/time
+        "date": "Date",
+        "time": "string",
+        "time without time zone": "string",
+        "time with time zone": "string",
+        "timestamp": "Date",
+        "timestamp without time zone": "Date",
+        "timestamp with time zone":    "Date",
+        "interval":                 "string",
+
+        "json": "any",
+        "jsonb": "any",
+        "uuid": "string",
+    }
+
+    if data_type == "USER-DEFINED":
+        return "string"
+
+    return mapping.get(data_type, "any")

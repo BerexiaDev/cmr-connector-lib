@@ -2,10 +2,16 @@
 # -*- coding: utf-8 -*-
 
 import pyodbc
-from typing import Dict
-from .sql_connector import SqlConnector
-from .sql_connector_utils import cast_informix_to_typescript_types
+from typing import Dict, Any
 from loguru import logger
+from pyodbc import Cursor
+
+from .sql_connector import SqlConnector
+from .sql_connector_utils import cast_informix_to_typescript_types, cast_informix_to_postgresql_type, safe_convert_to_string
+from cmr_connectors_lib.database_connectors.utils.informix_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, \
+    _build_having_clause, _build_group_by
+
+
 class InformixConnector(SqlConnector):
 
     def __init__(self, host, user, password, port, database, protocol, locale):
@@ -55,6 +61,54 @@ class InformixConnector(SqlConnector):
             logger.error(f"Database connection failed: {e}")
             return False
     
+    
+    def extract_data_batch(self, table_name: str, offset: int = 0, limit: int = 100):
+        """
+           Extracts a batch of rows from an Informix table using SKIP/FIRST.
+           Defaults to the first 100 rows if offset/limit are not provided.
+        """
+        query = f'SELECT SKIP {offset} FIRST {limit} * FROM {table_name};'
+        logger.info(f"Fetching batch: table={table_name}, offset={offset}, limit={limit}")
+        
+        try:
+            connection = self.get_connection()
+            result_proxy = connection.execute(query)
+            rows = result_proxy.fetchall()
+            column_names = [col[0] for col in result_proxy.description]
+            batch_data = [
+                {col: safe_convert_to_string(row[i]) for i, col in enumerate(column_names)}
+                for row in rows
+            ]
+
+            return batch_data
+
+        except Exception as e:
+            logger.error(f"Error extracting batch from {table_name}: {str(e)}")
+            return []
+
+
+    def fetch_batch(self, cursor: Cursor, table_name, offset: int, limit: int = 100):
+        """
+          Fetch up to `limit` rows from `table`, skipping the first `offset` rows.
+
+        Args:
+            table_name (str):       Name of the Informix table.
+            offset (int):      Number of rows to skip.
+            limit (int):       Maximum rows to return.
+            cursor:            An Informix cursor.
+
+        Returns:
+            list of tuple:     The fetched rows, empty if none remain.
+        """
+        try:
+            query = f'SELECT SKIP {offset} FIRST {limit} * FROM {table_name}'
+            cursor.execute(query)
+            results = cursor.fetchall()
+            return results
+        except Exception as e:
+            logger.error(f"Error fetching batch from {table_name}: {str(e)}")
+            return None
+
     def get_connection_tables(self):
         """Returns a list of all table names in the cmr database."""
         cursor = self.get_connection().cursor()
@@ -180,3 +234,133 @@ class InformixConnector(SqlConnector):
         except Exception as e:
             logger.error(f"Error getting database schema: {str(e)}")
             raise ValueError(f"Failed to retrieve database schema: {str(e)}")
+        
+        
+    def extract_table_schema(self, table_name):
+        try:
+            query = f'''
+            SELECT 
+            c.colno AS ordinal_position,
+            c.colname,
+            c.coltype,
+            c.collength,
+            CASE 
+                WHEN BITAND(c.coltype, 256) = 256 THEN 'NO' 
+                ELSE 'YES' 
+            END AS is_nullable,
+            
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM sysconstraints sc
+                    JOIN sysindexes si ON sc.idxname = si.idxname
+                    WHERE sc.constrtype = 'P'
+                        AND sc.tabid = c.tabid
+                        AND (
+                            si.part1 = c.colno OR si.part2 = c.colno OR si.part3 = c.colno OR 
+                            si.part4 = c.colno OR si.part5 = c.colno OR si.part6 = c.colno OR 
+                            si.part7 = c.colno OR si.part8 = c.colno OR si.part9 = c.colno OR 
+                            si.part10 = c.colno OR si.part11 = c.colno OR si.part12 = c.colno OR 
+                            si.part13 = c.colno OR si.part14 = c.colno OR si.part15 = c.colno OR 
+                            si.part16 = c.colno
+                        )
+                ) THEN 'YES'
+                ELSE 'NO'
+            END AS is_primary_key,
+            
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM sysconstraints sc
+                    JOIN sysreferences sr ON sc.constrid = sr.constrid
+                    JOIN sysindexes si ON sc.idxname = si.idxname
+                    WHERE sc.constrtype = 'R'
+                        AND sc.tabid = c.tabid
+                        AND (
+                            si.part1 = c.colno OR si.part2 = c.colno OR si.part3 = c.colno OR 
+                            si.part4 = c.colno OR si.part5 = c.colno OR si.part6 = c.colno OR 
+                            si.part7 = c.colno OR si.part8 = c.colno OR si.part9 = c.colno OR 
+                            si.part10 = c.colno OR si.part11 = c.colno OR si.part12 = c.colno OR 
+                            si.part13 = c.colno OR si.part14 = c.colno OR si.part15 = c.colno OR 
+                            si.part16 = c.colno
+                        )
+                ) THEN 'YES'
+                ELSE 'NO'
+            END AS is_foreign_key,
+            
+            d.default AS default_value
+
+            FROM syscolumns c
+            JOIN systables t ON c.tabid = t.tabid
+            LEFT JOIN sysdefaults d ON c.tabid = d.tabid AND c.colno = d.colno
+            WHERE t.tabname = '{table_name}'
+            ORDER BY c.colno;
+            '''
+            
+            cursor = self.get_connection().cursor()
+            cursor.execute(query)
+            columns = cursor.fetchall()
+            cursor.close()
+            
+            column_list = []
+            for col in columns:
+                column_list.append({
+                    'position': col[0],
+                    'name': col[1],
+                    'type': cast_informix_to_postgresql_type(col[2]),
+                    'length': col[3],
+                    'nullable': col[4],
+                    'primary_key': col[5],
+                    'foreign_key': col[6],
+                    'default': col[7]
+                })
+            
+            return column_list
+        
+        except Exception as e:
+            logger.error(f"Error getting database schema: {str(e)}")
+            return {"status": "error", "message": f"An error occurred: {str(e)}"}, 500
+
+
+    def build_query(self, data: Dict[str, Any], invert_where: bool = False):
+        """
+        Build an Informix SQL query based on the provided JSON definition.
+        """
+        try:
+            # Step 1: Validate input data
+            base_table = data.get('baseTable')
+            if not base_table:
+                logger.error("Base table is required")
+                return None
+
+            # Step 4: Build the SELECT clause
+            select_clause = _build_select_clause(data.get('selectedFields', []))
+
+            # Step 5: Build the FROM
+            from_clause = f"FROM {base_table}"
+            joins_clause = _build_joins_clause(base_table, data.get('joins', []))
+
+            # Step 6: Build the WHERE clause
+            where_clause = _build_where_clause(data.get('whereConditions', []), invert_where)
+
+            # Step 7: Build the GROUP BY clause
+            group_by_clause = _build_group_by(data.get('groupByFields', []))
+            having_clause = _build_having_clause(data.get('having', []))
+
+            # Combine clauses into a list
+            clauses = [
+                select_clause,
+                from_clause,
+                joins_clause,
+                where_clause,
+                group_by_clause,
+                having_clause
+            ]
+
+            # Join the clauses with a newline if the clause is not empty.
+            query = "\n".join(clause for clause in clauses if clause.strip())
+            return query
+
+        except Exception as e:
+            logger.error(f"Error building query: {str(e)}")
+            return None
