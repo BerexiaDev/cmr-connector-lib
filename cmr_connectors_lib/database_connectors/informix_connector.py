@@ -239,62 +239,71 @@ class InformixConnector(SqlConnector):
     def extract_table_schema(self, table_name):
         try:
             query = f'''
-            SELECT 
-            c.colno AS ordinal_position,
-            c.colname,
-            c.coltype,
-            c.collength,
-            CASE 
-                WHEN BITAND(c.coltype, 256) = 256 THEN 'NO' 
-                ELSE 'YES' 
-            END AS is_nullable,
-            
-            CASE 
-                WHEN EXISTS (
-                    SELECT 1 
-                    FROM sysconstraints sc
-                    JOIN sysindexes si ON sc.idxname = si.idxname
-                    WHERE sc.constrtype = 'P'
-                        AND sc.tabid = c.tabid
-                        AND (
-                            si.part1 = c.colno OR si.part2 = c.colno OR si.part3 = c.colno OR 
-                            si.part4 = c.colno OR si.part5 = c.colno OR si.part6 = c.colno OR 
-                            si.part7 = c.colno OR si.part8 = c.colno OR si.part9 = c.colno OR 
-                            si.part10 = c.colno OR si.part11 = c.colno OR si.part12 = c.colno OR 
-                            si.part13 = c.colno OR si.part14 = c.colno OR si.part15 = c.colno OR 
-                            si.part16 = c.colno
-                        )
-                ) THEN 'YES'
-                ELSE 'NO'
-            END AS is_primary_key,
-            
-            CASE 
-                WHEN EXISTS (
-                    SELECT 1 
-                    FROM sysconstraints sc
-                    JOIN sysreferences sr ON sc.constrid = sr.constrid
-                    JOIN sysindexes si ON sc.idxname = si.idxname
-                    WHERE sc.constrtype = 'R'
-                        AND sc.tabid = c.tabid
-                        AND (
-                            si.part1 = c.colno OR si.part2 = c.colno OR si.part3 = c.colno OR 
-                            si.part4 = c.colno OR si.part5 = c.colno OR si.part6 = c.colno OR 
-                            si.part7 = c.colno OR si.part8 = c.colno OR si.part9 = c.colno OR 
-                            si.part10 = c.colno OR si.part11 = c.colno OR si.part12 = c.colno OR 
-                            si.part13 = c.colno OR si.part14 = c.colno OR si.part15 = c.colno OR 
-                            si.part16 = c.colno
-                        )
-                ) THEN 'YES'
-                ELSE 'NO'
-            END AS is_foreign_key,
-            
-            d.default AS default_value
+                SELECT
+                c.colno      AS ordinal_position,
+                c.colname,
+                c.coltype,
+                c.collength,
+                CASE
+                    WHEN BITAND(c.coltype, 256) = 256 THEN 'NO'
+                    ELSE 'YES'
+                END                                       AS is_nullable,
 
-            FROM syscolumns c
-            JOIN systables t ON c.tabid = t.tabid
-            LEFT JOIN sysdefaults d ON c.tabid = d.tabid AND c.colno = d.colno
-            WHERE t.tabname = '{table_name}'
-            ORDER BY c.colno;
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM   sysconstraints sc
+                        JOIN   sysindexes     si ON sc.idxname = si.idxname
+                        WHERE  sc.constrtype = 'P'
+                          AND  sc.tabid     = c.tabid
+                          AND  (c.colno = si.part1 OR c.colno = si.part2 OR c.colno = si.part3
+                                OR c.colno = si.part4 OR c.colno = si.part5 OR c.colno = si.part6
+                                OR c.colno = si.part7 OR c.colno = si.part8 OR c.colno = si.part9
+                                OR c.colno = si.part10 OR c.colno = si.part11 OR c.colno = si.part12
+                                OR c.colno = si.part13 OR c.colno = si.part14 OR c.colno = si.part15
+                                OR c.colno = si.part16)
+                    ) THEN 'YES' ELSE 'NO'
+                END                                       AS is_primary_key,
+
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM   sysconstraints sc
+                        JOIN   sysreferences  sr ON sc.constrid = sr.constrid
+                        JOIN   sysindexes     si ON sc.idxname  = si.idxname
+                        WHERE  sc.constrtype = 'R'
+                          AND  sc.tabid      = c.tabid
+                          AND  (c.colno = si.part1 OR c.colno = si.part2 OR c.colno = si.part3
+                                OR c.colno = si.part4 OR c.colno = si.part5 OR c.colno = si.part6
+                                OR c.colno = si.part7 OR c.colno = si.part8 OR c.colno = si.part9
+                                OR c.colno = si.part10 OR c.colno = si.part11 OR c.colno = si.part12
+                                OR c.colno = si.part13 OR c.colno = si.part14 OR c.colno = si.part15
+                                OR c.colno = si.part16)
+                    ) THEN 'YES' ELSE 'NO'
+                END                                       AS is_foreign_key,
+
+
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM   sysindexes si
+                        WHERE  si.tabid = c.tabid
+                          AND  (c.colno = si.part1 OR c.colno = si.part2 OR c.colno = si.part3
+                                OR c.colno = si.part4 OR c.colno = si.part5 OR c.colno = si.part6
+                                OR c.colno = si.part7 OR c.colno = si.part8 OR c.colno = si.part9
+                                OR c.colno = si.part10 OR c.colno = si.part11 OR c.colno = si.part12
+                                OR c.colno = si.part13 OR c.colno = si.part14 OR c.colno = si.part15
+                                OR c.colno = si.part16)
+                    ) THEN 'YES' ELSE 'NO'
+                END                                       AS is_index,
+
+
+                d.default                                 AS default_value
+            FROM   syscolumns   c
+            JOIN   systables    t ON c.tabid = t.tabid
+            LEFT   JOIN sysdefaults d ON c.tabid = d.tabid AND c.colno = d.colno
+            WHERE  t.tabname = '{table_name}'
+            ORDER  BY c.colno;
             '''
             
             cursor = self.get_connection().cursor()
@@ -312,7 +321,8 @@ class InformixConnector(SqlConnector):
                     'nullable': col[4],
                     'primary_key': col[5],
                     'foreign_key': col[6],
-                    'default': col[7]
+                    "is_index": col[7],
+                    'default': col[8]
                 })
             
             return column_list

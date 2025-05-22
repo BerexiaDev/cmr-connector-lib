@@ -52,18 +52,24 @@ class PostgresConnector(SqlConnector):
             conn.commit()
             logger.info(f"Schema {schema_name} created or already exists.")
             
-    def create_table_if_missing(self, table_name:str, create_table_statement: str):
+    def create_table_if_missing(self, table_name:str, create_table_statement: str, index_table_statement:str):
         """Creates a table in PostgreSQL if it doesn't exist."""
         with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(create_table_statement)
+                cursor.execute(index_table_statement)
             conn.commit()
+            conn.close()
             logger.info(f"Table {table_name} created or already exists.")
     
-    def  build_create_table_statement(self, table_name: str, schema_name: str = 'public', columns = []) -> str:
-        """Generates a PostgreSQL CREATE TABLE statement from column metadata."""
+    def  build_create_table_statement(self, table_name: str, schema_name: str = 'public', columns = []) -> tuple[str, str]:
+        """
+        Generates a PostgreSQL CREATE TABLE statement along with a CREATE INDEX statement
+        (for indexed columns) using the provided column metadata.
+        """
         column_defs = []
         primary_keys = []
+        index_keys = []
         for col in columns:
             col_name = col["name"]
             col_type = col["type"].upper()
@@ -71,6 +77,8 @@ class PostgresConnector(SqlConnector):
             nullable = col["nullable"].strip() == "YES"
             default = col["default"]
             is_pk = col["primary_key"].strip() == "YES"
+            if col['is_index'] == "YES":
+                index_keys.append(col_name)
 
             # Handle types with length
             if col_type in ("VARCHAR", "CHAR") and length:
@@ -102,7 +110,10 @@ class PostgresConnector(SqlConnector):
 
         columns_sql = ",\n  ".join(column_defs)
         create_stmt = f'CREATE TABLE IF NOT EXISTS "{schema_name}"."{table_name}" (\n  {columns_sql}\n);'
-        return create_stmt
+        index_name = f"idx_'{schema_name}'_'{table_name}'_{'_'.join(index_keys)}"
+        cols_sql = ", ".join(primary_keys)
+        index_stmt = f"CREATE INDEX {index_name} ON '{schema_name}'.'{table_name}' ({cols_sql});"
+        return create_stmt, index_stmt
 
 
     def ping(self):
