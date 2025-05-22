@@ -62,7 +62,7 @@ class PostgresConnector(SqlConnector):
             conn.close()
             logger.info(f"Table {table_name} created or already exists.")
     
-    def  build_create_table_statement(self, table_name: str, schema_name: str = 'public', columns = []) -> tuple[str, str]:
+    def  build_create_table_statement(self, table_name: str, schema_name: str = 'public', columns = []):
         """
         Generates a PostgreSQL CREATE TABLE statement along with a CREATE INDEX statement
         (for indexed columns) using the provided column metadata.
