@@ -112,7 +112,7 @@ class PostgresConnector(SqlConnector):
         create_stmt = f'CREATE TABLE IF NOT EXISTS "{schema_name}"."{table_name}" (\n  {columns_sql}\n);'
         index_name = f"idx_{schema_name}_{table_name}_{'_'.join(index_keys)}"
         cols_sql = ", ".join(primary_keys)
-        index_stmt = f"CREATE INDEX {index_name} ON '{schema_name}'.'{table_name}' ({cols_sql});"
+        index_stmt = f"CREATE INDEX {index_name} ON {schema_name}.{table_name} ({cols_sql});"
         return create_stmt, index_stmt
 
 
