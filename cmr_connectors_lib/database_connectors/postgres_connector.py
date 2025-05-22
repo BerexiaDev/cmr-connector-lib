@@ -59,7 +59,6 @@ class PostgresConnector(SqlConnector):
                 cursor.execute(create_table_statement)
                 cursor.execute(index_table_statement)
             conn.commit()
-            conn.close()
             logger.info(f"Table {table_name} created or already exists.")
     
     def  build_create_table_statement(self, table_name: str, schema_name: str = 'public', columns = []):
