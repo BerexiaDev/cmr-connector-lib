@@ -196,6 +196,49 @@ class PostgresConnector(SqlConnector):
         finally:
             conn.close()
 
+    def get_view_columns(self, table_name: str, schema_name: str = 'populations'):
+        """
+           Returns a list of dicts with column names and mapped TypeScript types
+           for the given Postgres view in the given schema.
+
+           Args:
+               table_name: The name of the table to get columns for
+               schema: Schema name, defaults to "populations"
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                        SELECT
+                          n.nspname      AS table_schema,
+                          c.relname      AS table_name,
+                          a.attname      AS column_name,
+                          t.typname      AS udt_name
+                        FROM pg_attribute AS a
+                        JOIN pg_class     AS c ON a.attrelid = c.oid
+                        JOIN pg_namespace AS n ON c.relnamespace = n.oid
+                        JOIN pg_type      AS t ON a.atttypid   = t.oid
+                        WHERE c.relkind    = 'm' -- materialized views
+                          AND n.nspname    = %s
+                          AND c.relname    = %s
+                          AND a.attnum > 0
+                          AND NOT a.attisdropped
+                        ORDER BY a.attnum;
+                      """,
+                    (schema_name, table_name),
+                )
+                rows = cur.fetchall()
+
+            columns: list[dict[str, str]] = []
+            for column_name, data_type, udt_name in rows:
+                ts_type = cast_postgres_to_typescript(data_type, udt_name)
+                columns.append({"name": column_name, "type": ts_type})
+            return columns
+
+        finally:
+            conn.close()
+
 
     def count_table_rows(self, table_name: str) -> int:
         try:
