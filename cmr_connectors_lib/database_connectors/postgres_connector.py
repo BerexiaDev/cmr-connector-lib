@@ -211,9 +211,8 @@ class PostgresConnector(SqlConnector):
                 cur.execute(
                     """
                         SELECT
-                          c.relname      AS table_name,
                           a.attname      AS column_name,
-                          t.typname      AS udt_name
+                          t.typname      AS data_type
                         FROM pg_attribute AS a
                         JOIN pg_class     AS c ON a.attrelid = c.oid
                         JOIN pg_namespace AS n ON c.relnamespace = n.oid
@@ -230,8 +229,8 @@ class PostgresConnector(SqlConnector):
                 rows = cur.fetchall()
 
             columns: list[dict[str, str]] = []
-            for column_name, data_type, udt_name in rows:
-                ts_type = cast_postgres_to_typescript(data_type, udt_name)
+            for column_name, data_type in rows:
+                ts_type = cast_postgres_to_typescript(column_name, data_type)
                 columns.append({"name": column_name, "type": ts_type})
             return columns
 
