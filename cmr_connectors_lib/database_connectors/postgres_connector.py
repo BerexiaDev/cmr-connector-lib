@@ -211,7 +211,6 @@ class PostgresConnector(SqlConnector):
                 cur.execute(
                     """
                         SELECT
-                          n.nspname      AS table_schema,
                           c.relname      AS table_name,
                           a.attname      AS column_name,
                           t.typname      AS udt_name
