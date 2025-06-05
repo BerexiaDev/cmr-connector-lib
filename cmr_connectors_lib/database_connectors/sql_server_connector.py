@@ -112,6 +112,7 @@ class SqlServerConnector(SqlConnector):
                 WHERE t.is_ms_shipped = 0
             """
         cursor = self.get_connection().cursor()
+        cursor.execute(sql)
         tables = [row.name for row in cursor.fetchall()]
         cursor.close()
         return tables
