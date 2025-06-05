@@ -11,7 +11,6 @@ setup(
         "sqlalchemy",
         "cx_oracle",
         "loguru",
-        "pymssql"
     ],
     description='CMR Connectors Library',
     author='Soufiane',
