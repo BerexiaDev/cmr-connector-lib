@@ -1,4 +1,3 @@
-from cmr_connectors_lib.database_connectors.oracle_connector import OracleConnector
 from cmr_connectors_lib.database_connectors.postgres_connector import PostgresConnector
 from cmr_connectors_lib.database_connectors.sql_server_connector import SqlServerConnector
 from cmr_connectors_lib.database_connectors.informix_connector import InformixConnector
@@ -23,9 +22,9 @@ class ConnectorFactory():
                                           connector_settings["password"], connector_settings["port"],
                                           connector_settings["database"], connector_settings.get("schema", 'public'))
             return connector
-        elif connector_type == 'oracledb':
-            connector = OracleConnector(**connector_settings)
-            return connector
+        # elif connector_type == 'oracledb':
+        #     connector = OracleConnector(**connector_settings)
+        #     return connector
         elif connector_type == 'informix':
             connector = InformixConnector(connector_settings["host"], connector_settings["user"],
                                           connector_settings["password"], connector_settings["port"],
