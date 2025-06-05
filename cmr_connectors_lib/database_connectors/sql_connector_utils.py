@@ -323,54 +323,54 @@ def cast_sqlserver_to_postgresql_type(sql_server_type: str) -> str:
     sql_server_to_pg: Dict[str, str] = {
 
         # Numerics
-        "int": "integer",
-        "integer": "integer",
-        "bigint": "bigint",
-        "smallint": "smallint",
-        "tinyint": "smallint",  # no 1-byte integer in PG
-        "decimal": "numeric",
-        "numeric": "numeric",
-        "money": "money",
-        "smallmoney": "money",
-        "float": "double precision",
-        "real": "real",
+        "int": "INTEGER",
+        "integer": "INTEGER",
+        "bigint": "BIGINT",
+        "smallint": "SMALLINT",
+        "tinyint": "SMALLINT",  # no 1-byte integer in PG
+        "decimal": "NUMERIC",
+        "numeric": "NUMERIC",
+        "money": "MONEY",
+        "smallmoney": "MONEY",
+        "float": "DOUBLE PRECISION",
+        "real": "REAL",
 
-        # boolean
-        "bit": "boolean",
+        # Boolean
+        "bit": "BOOLEAN",
 
-        # character / text
-        "char": "char",
-        "nchar": "char",
-        "varchar": "varchar",
-        "nvarchar": "varchar",
-        "text": "text",
-        "ntext": "text",
-        "xml": "xml",
+        # Character / Text
+        "char": "CHAR",
+        "nchar": "CHAR",
+        "varchar": "VARCHAR",
+        "nvarchar": "VARCHAR",
+        "text": "TEXT",
+        "ntext": "TEXT",
+        "xml": "XML",
 
-        # binary / blob
-        "binary": "bytea",
-        "varbinary": "bytea",
-        "image": "bytea",
-        "rowversion": "bytea",
-        "timestamp": "bytea",
+        # Binary / BLOB
+        "binary": "BYTEA",
+        "varbinary": "BYTEA",
+        "image": "BYTEA",
+        "rowversion": "BYTEA",
+        "timestamp": "BYTEA",
 
-        # misc scalars
-        "uniqueidentifier": "uuid",
-        "sql_variant": "jsonb",
-        "sysname": "text",
+        # Misc Scalars
+        "uniqueidentifier": "UUID",
+        "sql_variant": "JSONB",
+        "sysname": "TEXT",
 
-        # temporal
-        "date": "date",
-        "time": "time",
-        "datetime": "timestamp",
-        "smalldatetime": "timestamp",
-        "datetime2": "timestamp",
-        "datetimeoffset": "timestamptz",
+        # Temporal
+        "date": "DATE",
+        "time": "TIME",
+        "datetime": "TIMESTAMP",
+        "smalldatetime": "TIMESTAMP",
+        "datetime2": "TIMESTAMP",
+        "datetimeoffset": "TIMESTAMPTZ",
 
-        # spatial & hierarchy (PostGIS / contrib types)
-        "geometry": "geometry",
-        "geography": "geography",
-        "hierarchyid": "ltree",
+        # Spatial & Hierarchy (PostGIS / contrib types)
+        "geometry": "GEOMETRY",
+        "geography": "GEOGRAPHY",
+        "hierarchyid": "LTREE",
     }
 
-    return sql_server_to_pg.get(sql_server_type, "text")
+    return sql_server_to_pg.get(sql_server_type, "TEXT")

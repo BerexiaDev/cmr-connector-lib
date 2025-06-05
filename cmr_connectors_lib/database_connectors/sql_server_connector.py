@@ -152,62 +152,84 @@ class SqlServerConnector(SqlConnector):
             - primary key, foreign key, and index flags
             """
         try:
-            with self.get_connection() as conn:
-                schema_sql = """
-                        WITH pk_cols AS (
-                            SELECT c.name AS col_name
-                            FROM sys.indexes i
-                            JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
-                            JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
-                            WHERE i.object_id = OBJECT_ID(?) AND i.is_primary_key = 1
-                        ),
-                        fk_cols AS (
-                            SELECT c.name AS col_name
-                            FROM sys.foreign_key_columns fkc
-                            JOIN sys.columns c ON fkc.parent_object_id = c.object_id AND fkc.parent_column_id = c.column_id
-                            WHERE fkc.parent_object_id = OBJECT_ID(?)
-                        ),
-                        idx_cols AS (
-                            SELECT DISTINCT c.name AS col_name
-                            FROM sys.indexes i
-                            JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
-                            JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
-                            WHERE i.object_id = OBJECT_ID(?) AND i.is_primary_key = 0
-                        )
-                        SELECT
-                            col.column_id,
-                            col.name,
-                            TYPE_NAME(col.user_type_id) AS data_type,
-                            col.max_length,
-                            IIF(col.is_nullable = 1, 'YES', 'NO') AS is_nullable,
-                            OBJECT_DEFINITION(col.default_object_id) AS default_value,
-                            IIF(pk.col_name IS NOT NULL, 'YES', 'NO') AS is_primary_key,
-                            IIF(fk.col_name IS NOT NULL, 'YES', 'NO') AS is_foreign_key,
-                            IIF(ix.col_name IS NOT NULL, 'YES', 'NO') AS is_indexed
-                        FROM sys.columns col
-                        LEFT JOIN pk_cols pk ON col.name = pk.col_name
-                        LEFT JOIN fk_cols fk ON col.name = fk.col_name
-                        LEFT JOIN idx_cols ix ON col.name = ix.col_name
-                        WHERE col.object_id = OBJECT_ID(?)
-                        ORDER BY col.column_id;
-                    """
+            cursor = self.get_connection().cursor()
+            schema_sql = """
+                    WITH pk_cols AS (
+                        SELECT c.name AS col_name
+                        FROM sys.indexes i
+                        JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+                        JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+                        WHERE i.object_id = OBJECT_ID(?) AND i.is_primary_key = 1
+                    ),
+                    fk_cols AS (
+                        SELECT c.name AS col_name
+                        FROM sys.foreign_key_columns fkc
+                        JOIN sys.columns c ON fkc.parent_object_id = c.object_id AND fkc.parent_column_id = c.column_id
+                        WHERE fkc.parent_object_id = OBJECT_ID(?)
+                    ),
+                    idx_cols AS (
+                        SELECT DISTINCT c.name AS col_name
+                        FROM sys.indexes i
+                        JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+                        JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+                        WHERE i.object_id = OBJECT_ID(?) AND i.is_primary_key = 0
+                    )
+                    SELECT
+                        col.column_id,
+                        col.name,
+                        TYPE_NAME(col.user_type_id) AS data_type,
+                        col.max_length,
+                        IIF(col.is_nullable = 1, 'YES', 'NO') AS is_nullable,
+                        OBJECT_DEFINITION(col.default_object_id) AS default_value,
+                        IIF(pk.col_name IS NOT NULL, 'YES', 'NO') AS is_primary_key,
+                        IIF(fk.col_name IS NOT NULL, 'YES', 'NO') AS is_foreign_key,
+                        IIF(ix.col_name IS NOT NULL, 'YES', 'NO') AS is_indexed
+                    FROM sys.columns col
+                    LEFT JOIN pk_cols pk ON col.name = pk.col_name
+                    LEFT JOIN fk_cols fk ON col.name = fk.col_name
+                    LEFT JOIN idx_cols ix ON col.name = ix.col_name
+                    WHERE col.object_id = OBJECT_ID(?)
+                    ORDER BY col.column_id;
+                """
 
-                result = conn.execute(schema_sql, table_name, table_name, table_name, table_name).fetchall()
+            rows = cursor.execute(schema_sql, table_name, table_name, table_name, table_name).fetchall()
+            cursor.close()
+            result = []
+            for row in rows:
+                sql_type = row.data_type.upper()
 
-                return [
-                    {
-                        "position": row.column_id,
-                        "name": row.name,
-                        "type": cast_sqlserver_to_postgresql_type(row.data_type),
-                        "length": row.max_length,
-                        "nullable": row.is_nullable,
-                        "primary_key": row.is_primary_key,
-                        "foreign_key": row.is_foreign_key,
-                        "is_index": row.is_indexed,
-                        "default": (row.default_value or "").strip(),
-                    }
-                    for row in result
-                ]
+                # Handle any LOB/“MAX” types where max_length = -1
+                if row.max_length == -1:
+
+                    if sql_type in ("VARCHAR", "CHAR", "NVARCHAR", "NCHAR", "TEXT", "NTEXT"):
+                        pg_type = "TEXT"
+
+                    elif sql_type in ("VARBINARY", "IMAGE"):
+                        pg_type = "BYTEA"
+
+                    elif sql_type == "XML":
+                        pg_type = "XML"
+
+                    else:
+                        pg_type = "TEXT"
+
+                # Otherwise, handle fixed-length or length‐bounded
+                else:
+                    pg_type = cast_sqlserver_to_postgresql_type(row.data_type)
+
+                result.append({
+                    "position": row.column_id,
+                    "name": row.name,
+                    "type": pg_type,
+                    "length": row.max_length,
+                    "nullable": row.is_nullable,
+                    "default": (row.default_value or "").strip(),
+                    "primary_key": row.is_primary_key,
+                    "foreign_key": row.is_foreign_key,
+                    "is_index": row.is_indexed,
+                })
+
+            return result
 
         except Exception as exc:
             logger.error(f"Error extracting schema for {table_name}: {exc}")
