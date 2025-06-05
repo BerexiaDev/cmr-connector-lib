@@ -7,10 +7,9 @@ import pandas as pd
 from loguru import logger
 from sqlalchemy import create_engine, inspect, Table, MetaData, text
 from .sql_connector_utils import cast_sql_to_typescript_types
-from cmr_connectors_lib.connector import Connector
 from loguru import logger
 
-class SqlConnector(Connector):
+class SqlConnector():
 
     def __init__(self, host, user, password, port, database):
         self.host = host
@@ -56,18 +55,6 @@ class SqlConnector(Connector):
         columns = [{'name': col['name'], 'type': cast_sql_to_typescript_types(col['type'])} for col in inspector.get_columns(table_name)]
         return columns
 
-    def get_df(self, query, preview=False, rows=10, *args, **kwargs):
-        constructed_query = self.construct_query(query, preview, rows)
-        conn = self.get_engine()
-        return pd.read_sql_query(constructed_query, conn)
-
-    def upload_df(self, df, table, schema, if_exists='fail', *args, **kwargs):
-        conn = self.get_engine()
-        df.to_sql(table, con=conn, index=False, if_exists=if_exists)
-
-    def construct_query(self, query, preview, rows):
-        return query
-    
     
     def get_database_schema(self) -> Dict[str, Table]:
         try:
