@@ -223,7 +223,7 @@ class SqlServerConnector(SqlConnector):
                     "type": pg_type,
                     "length": row.max_length,
                     "nullable": row.is_nullable,
-                    "default": (row.default_value or "").strip(),
+                    "default": row.default_value,
                     "primary_key": row.is_primary_key,
                     "foreign_key": row.is_foreign_key,
                     "is_index": row.is_indexed,
