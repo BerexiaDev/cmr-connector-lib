@@ -4,7 +4,7 @@
 from abc import abstractmethod
 
 from pyodbc import Cursor
-
+from loguru import logger
 
 class SqlConnector():
 
@@ -19,41 +19,47 @@ class SqlConnector():
     
     @abstractmethod
     def get_connection(self):
-        pass
-    
-    @abstractmethod
+        """Returns a connection object from the driver."""
+
+
     def ping(self):
-        pass
+        """Returns True if the connection is successful, False otherwise."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()  # Ensure the query runs
+            logger.info("Database connection is active.")
+            return True
+        except Exception as e:
+            logger.error(f"Database connection failed: {e}")
+            return False
+        finally:
+            cursor.close()
+            conn.close()
     
     @abstractmethod
     def get_connection_tables(self):
         """
-        Returns a list of all table names in the given PostgreSQL schema.
+        Returns a list of all table names in the given database.
         """
-        pass
-    
-    def get_connection_columns(self, table_name, schema=None):
-        """
-        Returns a list of dicts with column names and mapped TypeScript types
-        for the given Postgres table in the given schema.
 
-        Args:
-            table_name: The name of the table to get columns for
-            schema: Schema name for postgres
-        """
-        pass
+    @abstractmethod
+    def get_connection_columns(self, table_name):
+        """Returns a list of dictionaries with column names and types for the given table."""
 
-    
+
     def get_database_schema(self):
         pass
 
+    @abstractmethod
     def extract_data_batch(self, table_name: str, offset: int = 0, limit: int = 100):
         """
            Extracts a batch of rows from a table using SKIP/FIRST.
            Defaults to the first 100 rows if offset/limit are not provided.
         """
-        pass
 
+    @abstractmethod
     def fetch_batch(self, cursor: Cursor, table_name, offset: int, limit: int = 100):
         """
           Fetch up to `limit` rows from `table`, skipping the first `offset` rows.
@@ -62,18 +68,16 @@ class SqlConnector():
             table_name (str):       Name of the Informix table.
             offset (int):      Number of rows to skip.
             limit (int):       Maximum rows to return.
-            cursor:            Cursor.
+            cursor (Cursor):       An active database cursor. Must remain open; do not close it inside this method.
 
         Returns:
             list of tuple:     The fetched rows, empty if none remain.
         """
-        pass
 
-
-    def extract_table_schema(self, table_name: str, schema: str = "public"):
+    @abstractmethod
+    def extract_table_schema(self, table_name: str):
         """
            Gather column-level details from database including:
            - column name, type, nullability, default
            - primary key, foreign key, and index flags
         """
-        pass
