@@ -347,7 +347,7 @@ class PostgresConnector(SqlConnector):
 
             columns: list[dict[str, str]] = []
             for column_name, data_type in rows:
-                ts_type = cast_postgres_to_typescript(column_name, data_type)
+                ts_type = cast_postgres_to_typescript(data_type)
                 columns.append({"name": column_name, "type": ts_type})
             return columns
         except Exception as e:
