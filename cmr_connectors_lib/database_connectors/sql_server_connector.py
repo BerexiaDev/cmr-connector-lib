@@ -1,12 +1,11 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
 from typing import List
 
 import pyodbc
 from loguru import logger
+
 from .sql_connector import SqlConnector
-from .sql_connector_utils import cast_informix_to_typescript_types, cast_informix_to_postgresql_type, \
-    safe_convert_to_string, cast_sqlserver_to_typescript_types, cast_sqlserver_to_postgresql_type
+from .sql_connector_utils import safe_convert_to_string, cast_sqlserver_to_typescript_types, \
+    cast_sqlserver_to_postgresql_type
 
 
 class SqlServerConnector(SqlConnector):
@@ -26,30 +25,23 @@ class SqlServerConnector(SqlConnector):
         )
         return pyodbc.connect(conn_str)
 
-
     def ping(self):
         """Returns True if the connection is successful, False otherwise."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
             cursor.execute("SELECT 1")
             cursor.fetchone()  # Ensure the query runs
             logger.info("Database connection is active.")
-            conn.close()
             return True
         except Exception as e:
             logger.error(f"Database connection failed: {e}")
             return False
+        finally:
+            cursor.close()
+            conn.close()
 
-
-    def extract_data_batch(
-            self, table_name: str, offset: int = 0, limit: int = 100
-    ) -> List[dict]:
-        """
-        Pull `limit` rows starting at `offset` from `table_name`.
-        Uses OFFSET/FETCH, which requires an ORDER BY – we fake one with
-        `(SELECT NULL)` so the call works for any table.
-        """
+    def extract_data_batch(self, table_name: str, offset: int = 0, limit: int = 100) -> List[dict]:
         query = (
             f"SELECT * "
             f"FROM {table_name} "
@@ -58,9 +50,10 @@ class SqlServerConnector(SqlConnector):
             f"FETCH NEXT {limit} ROWS ONLY;"
         )
         logger.info(f"Fetching batch: table={table_name}, offset={offset}, limit={limit}")
+        conn = self.get_connection()
+        cur = conn.cursor()
         try:
-            conn = self.get_connection()
-            cur = conn.execute(query)
+            cur.execute(query)
             cols = [c[0] for c in cur.description]
             return [
                 {col: safe_convert_to_string(row[idx]) for idx, col in enumerate(cols)}
@@ -69,27 +62,11 @@ class SqlServerConnector(SqlConnector):
         except Exception as exc:
             logger.error(f"Error extracting batch from {table_name}: {exc}")
             return []
+        finally:
+            cur.close()
+            conn.close()
 
-
-    def fetch_batch(
-            self,
-            cursor: pyodbc.Cursor,
-            table_name: str,
-            offset: int,
-            limit: int = 100,
-    ):
-        """
-            Fetch up to `limit` rows from `table`, skipping the first `offset` rows.
-
-            Args:
-                table_name (str):       Name of the Informix table.
-                offset (int):      Number of rows to skip.
-                limit (int):       Maximum rows to return.
-                cursor:            An SqlServer cursor.
-
-            Returns:
-                list of tuple:     The fetched rows, empty if none remain.
-        """
+    def fetch_batch(self, cursor: pyodbc.Cursor, table_name: str, offset: int, limit: int = 100):
         try:
             query = (
                 f"SELECT * FROM {table_name} "
@@ -100,59 +77,67 @@ class SqlServerConnector(SqlConnector):
             return cursor.fetchall()
         except Exception as exc:
             logger.error(f"Error fetching batch from {table_name}: {exc}")
-            return None
+            return []
 
-    def get_connection_tables(self) -> List[str]:
-        """
-        Return user tables (excludes system tables & views) from INFORMATION_SCHEMA.
-        """
+    def get_connection_tables(self):
+        conn = self.get_connection()
+        cursor = conn.cursor()
         sql = """
                 SELECT  t.name
                 FROM sys.tables t
                 WHERE t.is_ms_shipped = 0
             """
-        cursor = self.get_connection().cursor()
-        cursor.execute(sql)
-        tables = [row.name for row in cursor.fetchall()]
-        cursor.close()
-        return tables
+        try:
+            cursor.execute(sql)
+            tables = [row.name for row in cursor.fetchall()]
+            return tables
+        except Exception as e:
+            logger.error(f"Error getting tables: {e}")
+            return []
+        finally:
+            cursor.close()
+            conn.close()
 
     def get_connection_columns(self, table_name):
-        """Returns a list of dictionaries with column names and types for the given table."""
-        cursor = self.get_connection().cursor()
-        sql = """
-                SELECT column_name, data_type
-                FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE table_name   = ?;
-          """
-        cursor.execute(sql, table_name)
-        rows = cursor.fetchall()
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            sql = """
+                    SELECT column_name, data_type
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE table_name   = ?;
+              """
+            cursor.execute(sql, table_name)
+            rows = cursor.fetchall()
 
-        columns = [{'name': row.column_name, 'type': cast_sqlserver_to_typescript_types(row.data_type)} for row in rows]
-
-        cursor.close()
-        return columns
-
+            columns = [{'name': row.column_name, 'type': cast_sqlserver_to_typescript_types(row.data_type)} for row in
+                       rows]
+            return columns
+        except Exception as e:
+            logger.error(f"Error getting columns: {e}")
+            return []
+        finally:
+            cursor.close()
+            conn.close()
 
     def count_table_rows(self, table_name: str) -> int:
+        connection = self.get_connection()
+        cursor = connection.cursor()
         try:
-            connection = self.get_connection()
-            count_result = connection.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+            count_result = cursor.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
             total_count = int(count_result[0]) if count_result else 0
             return total_count
         except Exception as e:
             logger.error(f"Error getting table total rows: {str(e)}")
-            raise ValueError(f"Failed to get table total rows: {str(e)}")
-
+            return 0
+        finally:
+            cursor.close()
+            connection.close()
 
     def extract_table_schema(self, table_name):
-        """
-            Gather column-level details from SQL Server including:
-            - column name, type, nullability, default
-            - primary key, foreign key, and index flags
-            """
+        conn = self.get_connection()
+        cursor = conn.cursor()
         try:
-            cursor = self.get_connection().cursor()
             schema_sql = """
                     WITH pk_cols AS (
                         SELECT c.name AS col_name
@@ -193,7 +178,6 @@ class SqlServerConnector(SqlConnector):
                 """
 
             rows = cursor.execute(schema_sql, table_name, table_name, table_name, table_name).fetchall()
-            cursor.close()
             result = []
             for row in rows:
                 sql_type = row.data_type.upper()
@@ -234,3 +218,6 @@ class SqlServerConnector(SqlConnector):
         except Exception as exc:
             logger.error(f"Error extracting schema for {table_name}: {exc}")
             return []
+        finally:
+            cursor.close()
+            conn.close()
