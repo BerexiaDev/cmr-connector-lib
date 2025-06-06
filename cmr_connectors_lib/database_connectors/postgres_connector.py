@@ -287,7 +287,7 @@ class PostgresConnector(SqlConnector):
             if not nullable:
                 col_def_parts.append("NOT NULL")
 
-            if default is not None:
+            if default:
                 if isinstance(default, str):
                     col_def_parts.append(f"DEFAULT '{default}'")
                 else:
