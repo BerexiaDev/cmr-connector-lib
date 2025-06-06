@@ -24,9 +24,6 @@ class PostgresConnector(SqlConnector):
         self.schema = schema
     
     def get_connection(self):
-        """Open a new psycopg2 connection.
-            If `schema` is provided, sets the search_path to '<schema>'.
-            """
         conn_params = {
             "host": self.host,
             "user": self.user,
@@ -38,22 +35,6 @@ class PostgresConnector(SqlConnector):
 
         return psycopg2.connect(**conn_params)
 
-
-    def ping(self):
-        """Returns True if the connection is successful, False otherwise."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT 1")
-            cursor.fetchone()  # Ensure the query runs
-            logger.info("Database connection is active.")
-            return True
-        except Exception as e:
-            logger.error(f"Database connection failed: {e}")
-            return False
-        finally:
-            cursor.close()
-            conn.close()
 
     def extract_data_batch( self, table_name: str, offset: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
         query = (
@@ -86,14 +67,12 @@ class PostgresConnector(SqlConnector):
         except Exception as e:
             logger.error(f"Error fetching batch from {table_name}: {str(e)}")
             return []
-        finally:
-            cursor.close()
 
 
     def get_connection_tables(self):
         conn = self.get_connection()
+        cur = conn.cursor()
         try:
-            cur = conn.cursor()
             cur.execute(
                 """
                 SELECT table_name
@@ -103,15 +82,15 @@ class PostgresConnector(SqlConnector):
                 """,
                 (self.schema,),
             )
-            # fetchall() returns list of tuples [(table1,), (table2,), …]
-            return [row[0] for row in cur.fetchall()]
+            return [row.table_name for row in cur.fetchall()]
         except Exception as e:
             logger.error(f"Error getting tables: {e}")
             return []
         finally:
+            cur.close()
             conn.close()
 
-    def get_connection_columns(self, table_name: str, schema: str = "public"):
+    def get_connection_columns(self, table_name: str):
         conn = self.get_connection()
         cur = conn.cursor()
         try:
@@ -126,7 +105,7 @@ class PostgresConnector(SqlConnector):
                   AND table_name   = %s
                 ORDER BY ordinal_position;
                 """,
-                (schema, table_name),
+                (self.schema, table_name),
             )
             rows = cur.fetchall()
 
@@ -135,7 +114,9 @@ class PostgresConnector(SqlConnector):
                 ts_type = cast_postgres_to_typescript(data_type, udt_name)
                 columns.append({"name": column_name, "type": ts_type})
             return columns
-
+        except Exception as e:
+            logger.error(f"Error getting columns: {e}")
+            return []
         finally:
             cur.close()
             conn.close()
@@ -156,7 +137,7 @@ class PostgresConnector(SqlConnector):
             cursor.close()
             connection.close()
 
-    def extract_table_schema(self, table_name, schema: str = "public"):
+    def extract_table_schema(self, table_name):
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -213,7 +194,7 @@ class PostgresConnector(SqlConnector):
                     ORDER BY a.attnum;
                 """
 
-            rows = cursor.execute(schema_sql, schema, table_name).fetchall()
+            rows = cursor.execute(schema_sql, self.schema, table_name).fetchall()
 
             result = [
                 {
