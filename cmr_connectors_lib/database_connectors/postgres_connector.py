@@ -82,7 +82,7 @@ class PostgresConnector(SqlConnector):
                 """,
                 (self.schema,),
             )
-            return [row.table_name for row in cur.fetchall()]
+            return [row[0] for row in cur.fetchall()]
         except Exception as e:
             logger.error(f"Error getting tables: {e}")
             return []
