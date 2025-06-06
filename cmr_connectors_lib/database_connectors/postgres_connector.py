@@ -199,15 +199,15 @@ class PostgresConnector(SqlConnector):
 
             result = [
                 {
-                    "position": row.position,
-                    "name": row.name,
-                    "type": row.data_type.upper(),
-                    "length": row.max_length,
-                    "nullable": row.is_nullable,
-                    "default": row.default_value,
-                    "primary_key": row.is_primary_key,
-                    "foreign_key": row.is_foreign_key,
-                    "is_index": row.is_indexed,
+                    "position": row[0],
+                    "name": row[1],
+                    "type": row[2].upper(),
+                    "length": row[3],
+                    "nullable": row[4],
+                    "default": row[5],
+                    "primary_key": row[6],
+                    "foreign_key": row[7],
+                    "is_index": row[8],
                 }
                 for row in rows
             ]
