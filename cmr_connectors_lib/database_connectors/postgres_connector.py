@@ -329,18 +329,18 @@ class PostgresConnector(SqlConnector):
             cur.execute(
                 """
                     SELECT
-                      a.attname      AS column_name,
-                      t.typname      AS data_type
-                    FROM pg_attribute AS a
-                    JOIN pg_class     AS c ON a.attrelid = c.oid
-                    JOIN pg_namespace AS n ON c.relnamespace = n.oid
-                    JOIN pg_type      AS t ON a.atttypid   = t.oid
-                    WHERE c.relkind    = 'm' -- materialized views
-                      AND n.nspname    = %s
-                      AND c.relname    = %s
-                      AND a.attnum > 0
-                      AND NOT a.attisdropped
-                    ORDER BY a.attnum;
+                        a.attname AS column_name,
+                        trim( split_part( pg_catalog.format_type(a.atttypid, a.atttypmod)
+                                        , '(' , 1) ) AS data_type
+                    FROM   pg_attribute   AS a
+                    JOIN   pg_class       AS c ON c.oid          = a.attrelid
+                    JOIN   pg_namespace   AS n ON n.oid          = c.relnamespace
+                    WHERE  c.relkind   = 'm'
+                      AND  n.nspname   = %s
+                      AND  c.relname   = %s
+                      AND  a.attnum    > 0
+                      AND  NOT a.attisdropped
+                    ORDER  BY a.attnum;
                   """,
                 (schema_name, table_name),
             )
