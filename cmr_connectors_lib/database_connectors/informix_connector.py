@@ -125,9 +125,6 @@ class InformixConnector(SqlConnector):
             WHERE tabid = (SELECT tabid FROM systables WHERE tabname = '{table_name}')
         """)
         rows = cursor.fetchall()
-        
-        for row in rows:
-            logger.info("colname: {}, coltype: {}", row.colname, row.coltype)
 
         columns = [{'name': row.colname, 'type': cast_informix_to_typescript_types(row.coltype)} for row in rows]
     
