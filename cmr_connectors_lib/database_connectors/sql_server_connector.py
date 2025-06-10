@@ -227,8 +227,8 @@ class SqlServerConnector(SqlConnector):
         sql = f"""
             SELECT *
             FROM {log_table}
-            WHERE operation_date > ?
-            ORDER BY operation_date
+            WHERE op_timestamp > ?
+            ORDER BY op_timestamp
             OFFSET ? ROWS
             FETCH NEXT ? ROWS ONLY
         """
