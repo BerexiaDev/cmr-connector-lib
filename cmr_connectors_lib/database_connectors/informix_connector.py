@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+from datetime import datetime
 
 import pyodbc
 from typing import Dict, Any
@@ -310,3 +311,25 @@ class InformixConnector(SqlConnector):
         finally:
             cursor.close()
             conn.close()
+
+    def fetch_deltas(self, cursor, log_table: str, since_ts: datetime, batch_size: int = 10_000):
+        sql = f"""
+               SELECT *
+               FROM {log_table}
+               WHERE op_timestamp > ?
+               ORDER BY op_timestamp
+               SKIP ? FIRST ?
+           """
+        offset = 0
+        while True:
+            cursor.execute(sql, (since_ts, offset, batch_size))
+            rows = cursor.fetchall()
+            if not rows:
+                break
+
+            col_names = [c[0] for c in cursor.description]  # once per batch
+            for tup in rows:
+                res = dict(zip(col_names, tup))
+                yield res
+
+            offset += batch_size

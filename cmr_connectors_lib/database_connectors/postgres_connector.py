@@ -1,7 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+from datetime import datetime
+
 from loguru import logger
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Iterator
 
 from pyodbc import Cursor
 
@@ -358,6 +360,27 @@ class PostgresConnector(SqlConnector):
         finally:
             cur.close()
             conn.close()
+
+    def fetch_deltas(self, cursor, log_table: str, since_ts: datetime, batch_size: int = 10_000):
+        sql = f"""
+            SELECT *
+            FROM {log_table}
+            WHERE op_timestamp > %s
+            ORDER BY op_timestamp
+            LIMIT %s OFFSET %s
+        """
+        offset = 0
+        while True:
+            cursor.execute(sql, (since_ts, batch_size, offset))
+            rows = cursor.fetchall()
+            if not rows:
+                break
+
+            col_names = [desc[0] for desc in cursor.description]
+            for row in rows:
+                yield dict(zip(col_names, row))
+
+            offset += batch_size
 
 
     def build_query(self, data: Dict[str, Any], invert_where: bool = False):

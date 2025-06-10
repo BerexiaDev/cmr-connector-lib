@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 from abc import abstractmethod
+from datetime import datetime
+from typing import Iterator, Dict, Any
 
 from pyodbc import Cursor
 from loguru import logger
@@ -80,4 +82,11 @@ class SqlConnector():
            Gather column-level details from database including:
            - column name, type, nullability, default
            - primary key, foreign key, and index flags
+        """
+
+    @abstractmethod
+    def fetch_deltas( self, cursor, log_table: str, since_ts: datetime, batch_size: int = 10_000) -> Iterator[Dict[str, Any]]:
+        """
+        Pull delta rows from <base_table>_log newer than since_ts.
+        Uses LIMIT/OFFSET for pagination.
         """
