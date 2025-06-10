@@ -194,7 +194,7 @@ class PostgresConnector(SqlConnector):
                     ORDER BY a.attnum;
                 """
 
-            cursor.execute(schema_sql, (self.schema, table_name))
+            cursor.execute(schema_sql, (self.schema, table_name),)
             rows = cursor.fetchall()
 
             result = [
