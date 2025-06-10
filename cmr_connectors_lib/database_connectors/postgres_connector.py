@@ -272,7 +272,7 @@ class PostgresConnector(SqlConnector):
             col_type = col["type"].upper()
             length = col.get("length")
             nullable = col["nullable"].strip() == "YES"
-            default = col["default"]
+            default = col["default"] or ""
             is_pk = col["primary_key"].strip() == "YES"
             if col['is_index'] == "YES":
                 index_keys.append(col_name)
@@ -290,16 +290,8 @@ class PostgresConnector(SqlConnector):
                 col_def_parts.append("NOT NULL")
 
                 # DEFAULT handling
-            d = default.strip()
-            if d:
-                low = d.lower()
-                if low.startswith("nextval(") or d.replace('.', '', 1).isdigit():
-                    # raw nextval(...) or numeric literal
-                    col_def_parts.append(f"DEFAULT {d}")
-                else:
-                    # everything else: quote safely
-                    esc = d.replace("'", "''")
-                    col_def_parts.append(f"DEFAULT '{esc}'")
+            if default:
+                col_def_parts.append(f"DEFAULT {default}")
 
             column_defs.append(" ".join(col_def_parts))
 
