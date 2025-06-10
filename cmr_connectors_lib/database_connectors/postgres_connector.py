@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+import re
 from datetime import datetime
 
 from loguru import logger
@@ -267,6 +268,8 @@ class PostgresConnector(SqlConnector):
         column_defs = []
         primary_keys = []
         index_keys = []
+        # matches func_name(…)  or   schema.func_name(…)
+        fun_call = re.compile(r'^[A-Za-z_][\w\.]*\s*\(.*\)$')
         for col in columns:
             col_name = col["name"]
             col_type = col["type"].upper()
@@ -291,7 +294,12 @@ class PostgresConnector(SqlConnector):
 
                 # DEFAULT handling
             if default:
-                col_def_parts.append(f"DEFAULT {default}")
+                d = default
+                # is this a function call?  (unquoted identifier + '(')
+                if not fun_call.match(d):
+                    # it’s either a literal ('…'), numeric (1234), casted literal ('…'::text), etc.
+                    col_def_parts.append(f"DEFAULT {d}")
+                # else: skip it
 
             column_defs.append(" ".join(col_def_parts))
 
