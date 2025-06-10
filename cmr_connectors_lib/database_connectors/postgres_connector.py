@@ -138,7 +138,6 @@ class PostgresConnector(SqlConnector):
             connection.close()
 
     def extract_table_schema(self, table_name):
-        logger.info("Extracting schema ************")
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -195,10 +194,7 @@ class PostgresConnector(SqlConnector):
                     ORDER BY a.attnum;
                 """
 
-            prams = (self.schema, table_name)
-            logger.info(f"Extracting schema: {prams}")
-
-            cursor.execute(schema_sql, prams)
+            cursor.execute(schema_sql, (self.schema, table_name))
             rows = cursor.fetchall()
 
             result = [
