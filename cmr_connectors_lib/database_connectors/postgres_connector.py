@@ -138,6 +138,7 @@ class PostgresConnector(SqlConnector):
             connection.close()
 
     def extract_table_schema(self, table_name):
+        logger.info("Extracting schema ************")
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
