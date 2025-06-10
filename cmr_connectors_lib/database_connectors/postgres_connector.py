@@ -194,7 +194,10 @@ class PostgresConnector(SqlConnector):
                     ORDER BY a.attnum;
                 """
 
-            cursor.execute(schema_sql, (self.schema, table_name),)
+            prams = (self.schema, table_name)
+            logger.info(f"Extracting schema: {prams}")
+
+            cursor.execute(schema_sql, prams)
             rows = cursor.fetchall()
 
             result = [
