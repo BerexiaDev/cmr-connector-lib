@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 
 import pyodbc
@@ -221,3 +222,25 @@ class SqlServerConnector(SqlConnector):
         finally:
             cursor.close()
             conn.close()
+
+    def fetch_deltas(self, cursor, log_table: str, since_ts: datetime, batch_size: int = 10_000):
+        sql = f"""
+            SELECT *
+            FROM {log_table}
+            WHERE operation_date > ?
+            ORDER BY operation_date
+            OFFSET ? ROWS
+            FETCH NEXT ? ROWS ONLY
+        """
+        offset = 0
+        while True:
+            cursor.execute(sql, (since_ts, offset, batch_size))
+            rows = cursor.fetchall()
+            if not rows:
+                break
+
+            col_names = [desc[0] for desc in cursor.description]
+            for row in rows:
+                yield dict(zip(col_names, row))
+
+            offset += batch_size
