@@ -85,7 +85,7 @@ class SqlConnector():
         """
 
     @abstractmethod
-    def fetch_deltas( self, cursor, log_table: str, since_ts: datetime, batch_size: int = 10_000) -> Iterator[Dict[str, Any]]:
+    def fetch_deltas( self, cursor, primary_key: str, log_table: str, since_ts: datetime, batch_size: int = 10_000) -> Iterator[Dict[str, Any]]:
         """
         Pull delta rows from <base_table>_log newer than since_ts.
         Uses LIMIT/OFFSET for pagination.

@@ -367,13 +367,14 @@ class PostgresConnector(SqlConnector):
             cur.close()
             conn.close()
 
-    def fetch_deltas(self, cursor, log_table: str, since_ts: datetime, batch_size: int = 10_000):
+    def fetch_deltas(self, cursor, primary_key: str, log_table: str, since_ts: datetime, batch_size: int = 10_000):
         sql = f"""
-            SELECT *
+            SELECT DISTINCT ON ({primary_key}) *
             FROM {log_table}
             WHERE op_timestamp > %s
-            ORDER BY op_timestamp
-            LIMIT %s OFFSET %s
+            ORDER BY {primary_key}, 
+            op_timestamp DESC
+            LIMIT %s OFFSET %s;
         """
         offset = 0
         while True:
