@@ -312,17 +312,22 @@ class InformixConnector(SqlConnector):
             cursor.close()
             conn.close()
 
-    def fetch_deltas(self, cursor, log_table: str, since_ts: datetime, batch_size: int = 10_000):
+    def fetch_deltas(self, cursor, primary_key: str, log_table: str, since_ts: datetime, batch_size: int = 10_000):
         sql = f"""
-               SELECT *
-               FROM {log_table}
-               WHERE op_timestamp > ?
-               ORDER BY op_timestamp
-               SKIP ? FIRST ?
+                SELECT SKIP ? FIRST ? *
+                FROM {log_table} lt1
+                WHERE op_timestamp = (
+                    SELECT MAX(op_timestamp)
+                    FROM {log_table} lt2
+                    WHERE lt2.id = lt1.{primary_key}
+                    AND lt2.op_timestamp > ?
+                )
+                AND op_timestamp > ?
+                ORDER BY {primary_key};
            """
         offset = 0
         while True:
-            cursor.execute(sql, (since_ts, offset, batch_size))
+            cursor.execute(sql, (offset, batch_size, since_ts, since_ts))
             rows = cursor.fetchall()
             if not rows:
                 break
