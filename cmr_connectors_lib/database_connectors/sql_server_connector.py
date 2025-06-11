@@ -223,14 +223,22 @@ class SqlServerConnector(SqlConnector):
             cursor.close()
             conn.close()
 
-    def fetch_deltas(self, cursor, log_table: str, since_ts: datetime, batch_size: int = 10_000):
+    def fetch_deltas(self, cursor, primary_key: str, log_table: str, since_ts: datetime, batch_size: int = 10_000):
         sql = f"""
             SELECT *
-            FROM {log_table}
-            WHERE op_timestamp > ?
-            ORDER BY op_timestamp
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY {primary_key}
+                           ORDER BY op_timestamp DESC
+                       ) AS rn
+                FROM {log_table}
+                WHERE op_timestamp > ?
+            ) AS ranked
+            WHERE rn = 1
+            ORDER BY {primary_key}
             OFFSET ? ROWS
-            FETCH NEXT ? ROWS ONLY
+            FETCH NEXT ? ROWS ONLY;
         """
         offset = 0
         while True:
