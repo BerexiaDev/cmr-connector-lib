@@ -432,3 +432,27 @@ class PostgresConnector(SqlConnector):
         except Exception as e:
             logger.error(f"Error building query: {str(e)}")
             return None
+        
+        
+    def truncate_table(self, table_name: str) -> bool:
+            """
+            Remove all data from the specified table while keeping its structure
+            """
+            try:
+                pg_conn = self.get_connection()
+                pg_cursor = pg_conn.cursor()
+                
+                # Execute TRUNCATE command
+                truncate_sql = f'TRUNCATE TABLE "{self.schema}"."{table_name}"'
+                pg_cursor.execute(truncate_sql)
+                pg_conn.commit()
+                
+                logger.info(f"Successfully truncated table: {table_name}")
+                return True
+                
+            except Exception as e:
+                logger.error(f"Failed to truncate table {table_name}: {str(e)}")
+                return False
+            finally:
+                pg_cursor.close()
+                pg_conn.close()
