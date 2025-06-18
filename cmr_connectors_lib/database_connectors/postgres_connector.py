@@ -43,11 +43,11 @@ class PostgresConnector(SqlConnector):
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            cur = cursor.execute(query)
-            cols = [c[0] for c in cur.description]
+            cursor.execute(query)
+            cols = [c[0] for c in cursor.description]
             return [
                 {col: safe_convert_to_string(row[idx]) for idx, col in enumerate(cols)}
-                for row in cur.fetchall()
+                for row in cursor.fetchall()
             ]
         except Exception as exc:
             logger.error(f"Error extracting batch from {table_name}: {exc}")
