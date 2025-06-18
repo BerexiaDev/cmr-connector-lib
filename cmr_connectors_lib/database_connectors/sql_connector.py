@@ -90,3 +90,9 @@ class SqlConnector():
         Pull delta rows from <base_table>_log newer than since_ts.
         Uses LIMIT/OFFSET for pagination.
         """
+        
+    @abstractmethod
+    def truncate_table(self, table_name: str) -> bool:
+        """
+        Remove all data from the specified table while keeping its structure
+        """
