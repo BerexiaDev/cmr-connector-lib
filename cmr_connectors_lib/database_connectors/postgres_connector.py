@@ -433,21 +433,26 @@ class PostgresConnector(SqlConnector):
         """
         Remove all data from the specified table while keeping its structure
         """
+        conn = None
+        cursor = None
         try:
-            pg_conn = self.get_connection()
-            pg_cursor = pg_conn.cursor()
+            conn = self.get_connection()
+            cursor = conn.cursor()
             
             # Execute TRUNCATE command
             truncate_sql = f'TRUNCATE TABLE "{self.schema}"."{table_name}"'
-            pg_cursor.execute(truncate_sql)
-            pg_conn.commit()
-            
-            logger.info(f"Successfully truncated table: {table_name}")
+            cursor.execute(truncate_sql)
+            conn.commit()
+            logger.info(f"Successfully truncated table: {self.schema}.{table_name}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to truncate table {table_name}: {str(e)}")
+            logger.error(f"Failed to truncate table {self.schema}.{table_name}: {str(e)}")
+            if conn:
+                conn.rollback()
             return False
         finally:
-            pg_cursor.close()
-            pg_conn.close()
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
