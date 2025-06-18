@@ -1,21 +1,16 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-import re
+import re, psycopg2
 from datetime import datetime
 
 from loguru import logger
-from typing import Dict, Any, List, Iterator
-
+from typing import Dict, Any, List
 from pyodbc import Cursor
 
 from .sql_connector import SqlConnector
-import psycopg2
-
 from cmr_connectors_lib.database_connectors.utils.postgres_connector_utils import _build_select_clause, _build_joins_clause, _build_where_clause, _build_group_by, \
     _build_having_clause
-
 from cmr_connectors_lib.database_connectors.sql_connector_utils import cast_postgres_to_typescript
-
 from .sql_connector_utils import safe_convert_to_string
 
 
@@ -435,24 +430,24 @@ class PostgresConnector(SqlConnector):
         
         
     def truncate_table(self, table_name: str) -> bool:
-            """
-            Remove all data from the specified table while keeping its structure
-            """
-            try:
-                pg_conn = self.get_connection()
-                pg_cursor = pg_conn.cursor()
-                
-                # Execute TRUNCATE command
-                truncate_sql = f'TRUNCATE TABLE "{self.schema}"."{table_name}"'
-                pg_cursor.execute(truncate_sql)
-                pg_conn.commit()
-                
-                logger.info(f"Successfully truncated table: {table_name}")
-                return True
-                
-            except Exception as e:
-                logger.error(f"Failed to truncate table {table_name}: {str(e)}")
-                return False
-            finally:
-                pg_cursor.close()
-                pg_conn.close()
+        """
+        Remove all data from the specified table while keeping its structure
+        """
+        try:
+            pg_conn = self.get_connection()
+            pg_cursor = pg_conn.cursor()
+            
+            # Execute TRUNCATE command
+            truncate_sql = f'TRUNCATE TABLE "{self.schema}"."{table_name}"'
+            pg_cursor.execute(truncate_sql)
+            pg_conn.commit()
+            
+            logger.info(f"Successfully truncated table: {table_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to truncate table {table_name}: {str(e)}")
+            return False
+        finally:
+            pg_cursor.close()
+            pg_conn.close()
