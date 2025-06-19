@@ -439,7 +439,7 @@ class PostgresConnector(SqlConnector):
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            use_schema = self.schema if self.schema else schema
+            use_schema = schema if schema else self.schema
             truncate_sql = f'TRUNCATE TABLE "{use_schema}"."{table_name}"'
             cursor.execute(truncate_sql)
             conn.commit()
