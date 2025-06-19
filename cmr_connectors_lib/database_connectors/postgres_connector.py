@@ -429,7 +429,7 @@ class PostgresConnector(SqlConnector):
             return None
         
         
-    def truncate_table(self, table_name: str) -> bool:
+    def truncate_table(self, table_name: str, schema: str = None) -> bool:
         """
         Remove all data from the specified table while keeping its structure
         """
@@ -439,15 +439,15 @@ class PostgresConnector(SqlConnector):
             conn = self.get_connection()
             cursor = conn.cursor()
             
-            # Execute TRUNCATE command
-            truncate_sql = f'TRUNCATE TABLE "{self.schema}"."{table_name}"'
+            use_schema = self.schema if self.schema else schema
+            truncate_sql = f'TRUNCATE TABLE "{use_schema}"."{table_name}"'
             cursor.execute(truncate_sql)
             conn.commit()
-            logger.info(f"Successfully truncated table: {self.schema}.{table_name}")
+            logger.info(f"Successfully truncated table: {use_schema}.{table_name}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to truncate table {self.schema}.{table_name}: {str(e)}")
+            logger.error(f"Failed to truncate table {use_schema}.{table_name}: {str(e)}")
             if conn:
                 conn.rollback()
             return False
