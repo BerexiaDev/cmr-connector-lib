@@ -110,7 +110,7 @@ class PostgresConnector(SqlConnector):
             columns: list[dict[str, str]] = []
             for column_name, data_type, udt_name in rows:
                 ts_type = cast_postgres_to_typescript(data_type)
-                columns.append({"name": column_name, "type": ts_type})
+                columns.append({"name": column_name, "type": ts_type, "alias": column_name})
             return columns
         except Exception as e:
             logger.error(f"Error getting columns: {e}")
