@@ -22,9 +22,7 @@ class ConnectorFactory():
                                           connector_settings["password"], connector_settings["port"],
                                           connector_settings["database"], connector_settings.get("schema", 'public'))
             return connector
-        # elif connector_type == 'oracledb':
-        #     connector = OracleConnector(**connector_settings)
-        #     return connector
+
         elif connector_type == 'informix':
             connector = InformixConnector(connector_settings["host"], connector_settings["user"],
                                           connector_settings["password"], connector_settings["port"],

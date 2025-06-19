@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+from datetime import datetime
 
 import pyodbc
 from typing import Dict, Any
@@ -27,7 +28,6 @@ class InformixConnector(SqlConnector):
         return query
 
     def get_connection(self):
-        """Returns a connection object from the driver."""
         conn_str = (
             f"DRIVER={self.driver_path};"
             f"DATABASE={self.database};"
@@ -44,60 +44,30 @@ class InformixConnector(SqlConnector):
         conn.setdecoding(pyodbc.SQL_CHAR, encoding='latin1')  # ISO-8859-1 = Latin-1
         conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')  # In case of wide chars
         return conn
-
-    def ping(self):
-        """Returns True if the connection is successful, False otherwise."""
-        try:
-            conn = self.get_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1")
-            cursor.fetchone()  # Ensure the query runs
-            logger.info("Database connection is active.")
-            cursor.close()
-            return True
-        except Exception as e:
-            logger.error(f"Database connection failed: {e}")
-            return False
     
     
     def extract_data_batch(self, table_name: str, offset: int = 0, limit: int = 100):
-        """
-           Extracts a batch of rows from an Informix table using SKIP/FIRST.
-           Defaults to the first 100 rows if offset/limit are not provided.
-        """
         query = f'SELECT SKIP {offset} FIRST {limit} * FROM {table_name};'
         logger.info(f"Fetching batch: table={table_name}, offset={offset}, limit={limit}")
-        
+        connection = self.get_connection()
+        cursor = connection.execute(query)
         try:
-            connection = self.get_connection()
-            result_proxy = connection.execute(query)
-            rows = result_proxy.fetchall()
-            column_names = [col[0] for col in result_proxy.description]
-            batch_data = [
+            rows = cursor.fetchall()
+            column_names = [col[0] for col in cursor.description]
+            return [
                 {col: safe_convert_to_string(row[i]) for i, col in enumerate(column_names)}
                 for row in rows
             ]
-
-            return batch_data
-
         except Exception as e:
             logger.error(f"Error extracting batch from {table_name}: {str(e)}")
             return []
+        finally:
+            cursor.close()
+            connection.close()
+
 
 
     def fetch_batch(self, cursor: Cursor, table_name, offset: int, limit: int = 100):
-        """
-          Fetch up to `limit` rows from `table`, skipping the first `offset` rows.
-
-        Args:
-            table_name (str):       Name of the Informix table.
-            offset (int):      Number of rows to skip.
-            limit (int):       Maximum rows to return.
-            cursor:            An Informix cursor.
-
-        Returns:
-            list of tuple:     The fetched rows, empty if none remain.
-        """
         try:
             query = f'SELECT SKIP {offset} FIRST {limit} * FROM {table_name}'
             cursor.execute(query)
@@ -105,41 +75,55 @@ class InformixConnector(SqlConnector):
             return results
         except Exception as e:
             logger.error(f"Error fetching batch from {table_name}: {str(e)}")
-            return None
+            return []
 
     def get_connection_tables(self):
-        """Returns a list of all table names in the cmr database."""
-        cursor = self.get_connection().cursor()
-        cursor.execute("SELECT tabname FROM systables WHERE tabtype = 'T' AND tabname NOT LIKE 'sys%'")
-        tables = [row.tabname for row in cursor.fetchall()]
-        cursor.close()
-        return tables
+        connection = self.get_connection()
+        cursor = connection.cursor()
+        try:
+            cursor.execute("SELECT tabname FROM systables WHERE tabtype = 'T' AND tabname NOT LIKE 'sys%'")
+            tables = [row.tabname for row in cursor.fetchall()]
+            return tables
+        except Exception as e:
+            logger.error(f"Error getting tables: {e}")
+            return []
+        finally:
+            cursor.close()
+            connection.close()
 
     def get_connection_columns(self, table_name):
-        """Returns a list of dictionaries with column names and types for the given table."""
-        cursor = self.get_connection().cursor()
-    
-        cursor.execute(f"""
-            SELECT colname, coltype 
-            FROM syscolumns 
-            WHERE tabid = (SELECT tabid FROM systables WHERE tabname = '{table_name}')
-        """)
-        rows = cursor.fetchall()
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(f"""
+                SELECT colname, coltype 
+                FROM syscolumns 
+                WHERE tabid = (SELECT tabid FROM systables WHERE tabname = '{table_name}')
+            """)
+            rows = cursor.fetchall()
 
-        columns = [{'name': row.colname, 'type': cast_informix_to_typescript_types(row.coltype)} for row in rows]
-    
-        cursor.close()
-        return columns
+            columns = [{'name': row.colname, 'type': cast_informix_to_typescript_types(row.coltype)} for row in rows]
+            return columns
+        except Exception as e:
+            logger.error(f"Error getting columns: {e}")
+            return []
+        finally:
+            cursor.close()
+            conn.close()
     
     def count_table_rows(self, table_name: str) -> int:
+        connection = self.get_connection()
+        cursor = connection.cursor()
         try:
-            connection = self.get_connection()
-            count_result = connection.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+            count_result = cursor.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
             total_count = int(count_result[0]) if count_result else 0
             return total_count
         except Exception as e:
             logger.error(f"Error getting table total rows: {str(e)}")
-            raise ValueError(f"Failed to get table total rows: {str(e)}")
+            raise 0
+        finally:
+            cursor.close()
+            connection.close()
     
     
     def get_database_schema(self) -> Dict[str, Dict]:
@@ -232,6 +216,8 @@ class InformixConnector(SqlConnector):
         
         
     def extract_table_schema(self, table_name):
+        conn = self.get_connection()
+        cursor = conn.cursor()
         try:
             query = f'''
                 SELECT
@@ -300,15 +286,11 @@ class InformixConnector(SqlConnector):
             WHERE  t.tabname = '{table_name}'
             ORDER  BY c.colno;
             '''
-            
-            cursor = self.get_connection().cursor()
             cursor.execute(query)
-            columns = cursor.fetchall()
-            cursor.close()
-            
-            column_list = []
-            for col in columns:
-                column_list.append({
+            rows = cursor.fetchall()
+
+            columns = [
+                {
                     'position': col[0],
                     'name': col[1],
                     'type': cast_informix_to_postgresql_type(col[2]),
@@ -318,10 +300,41 @@ class InformixConnector(SqlConnector):
                     'foreign_key': col[6],
                     "is_index": col[7],
                     'default': col[8]
-                })
-            
-            return column_list
+                }
+                for col in rows
+            ]
+            return columns
         
         except Exception as e:
             logger.error(f"Error getting database schema: {str(e)}")
-            return {"status": "error", "message": f"An error occurred: {str(e)}"}, 500
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def fetch_deltas(self, cursor, primary_key: str, log_table: str, since_ts: datetime, batch_size: int = 10_000):
+        sql = f"""
+                SELECT SKIP ? FIRST ? *
+                FROM {log_table} lt1
+                WHERE op_timestamp = (
+                    SELECT MAX(op_timestamp)
+                    FROM {log_table} lt2
+                    WHERE lt2.id = lt1.{primary_key}
+                    AND lt2.op_timestamp > ?
+                )
+                AND op_timestamp > ?
+                ORDER BY {primary_key};
+           """
+        offset = 0
+        while True:
+            cursor.execute(sql, (offset, batch_size, since_ts, since_ts))
+            rows = cursor.fetchall()
+            if not rows:
+                break
+
+            col_names = [c[0] for c in cursor.description]  # once per batch
+            for tup in rows:
+                res = dict(zip(col_names, tup))
+                yield res
+
+            offset += batch_size

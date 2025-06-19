@@ -1,6 +1,7 @@
+import re
 from typing import List, Dict, Any
 from cmr_connectors_lib.database_connectors.utils.enums import SelectType, AggregationFunction, ColumnType, JoinType, ComparisonType, QueryOperator, DateUnit
-
+import pandas as pd
 
 def _build_select_clause(selected_fields: List[Dict[str, Any]]) -> str:
     """Build the SELECT clause for PostgreSQL"""
@@ -271,3 +272,89 @@ def _format_value(value: Any, field_type: str) -> str:
         escaped = value.replace("'", "''")
         return f"'{escaped}'"
     return f"'{value}'"
+
+
+
+
+def map_series_to_postgres_type(series: pd.Series) -> str:
+    """
+    Detect appropriate PostgreSQL data type based on column data.
+    
+    Args:
+        series: Pandas series to analyze
+    
+    Returns:
+        PostgreSQL data type as string
+    """
+    # Remove null/empty values for analysis
+    non_null_series = series.dropna()
+    if len(non_null_series) == 0:
+        return "TEXT"
+    
+    # Convert to string and remove empty strings
+    string_series = non_null_series.astype(str).str.strip()
+    string_series = string_series[string_series != '']
+    
+    if len(string_series) == 0:
+        return "TEXT"
+    
+    # Check if all values are boolean-like
+    boolean_values = {'true', 'false', '1', '0', 'yes', 'no', 'y', 'n'}
+    if all(val.lower() in boolean_values for val in string_series):
+        return "BOOLEAN"
+    
+    # Check if all values are integers
+    integer_pattern = re.compile(r'^-?\d+$')
+    if all(integer_pattern.match(val) for val in string_series):
+        # Check the range to determine INT vs BIGINT
+        try:
+            max_val = max(int(val) for val in string_series)
+            min_val = min(int(val) for val in string_series)
+            
+            if -2147483648 <= min_val <= max_val <= 2147483647:
+                return "INTEGER"
+            else:
+                return "BIGINT"
+        except (ValueError, OverflowError):
+            return "BIGINT"
+    
+    # Check if all values are decimal numbers
+    decimal_pattern = re.compile(r'^-?\d+\.\d+$')
+    if all(decimal_pattern.match(val) or integer_pattern.match(val) for val in string_series):
+        return "DECIMAL"
+    
+    # Check if all values are dates
+    date_patterns = [
+        r'^\d{4}-\d{2}-\d{2}$',  # YYYY-MM-DD
+        r'^\d{2}/\d{2}/\d{4}$',  # MM/DD/YYYY
+        r'^\d{1,2}/\d{1,2}/\d{4}$',  # M/D/YYYY
+        r'^\d{4}/\d{2}/\d{2}$',  # YYYY/MM/DD
+    ]
+    
+    for pattern in date_patterns:
+        if all(re.match(pattern, val) for val in string_series):
+            return "DATE"
+    
+    # Check if all values are timestamps
+    timestamp_patterns = [
+        r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}',  # YYYY-MM-DD HH:MM:SS
+        r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}',  # ISO format
+    ]
+    
+    for pattern in timestamp_patterns:
+        if all(re.match(pattern, val) for val in string_series):
+            return "TIMESTAMP"
+    
+    # Determine VARCHAR length or use TEXT
+    max_length = max(len(val) for val in string_series)
+    
+    if max_length <= 50:
+        return "VARCHAR(50)"
+    elif max_length <= 100:
+        return "VARCHAR(100)"
+    elif max_length <= 255:
+        return "VARCHAR(255)"
+    elif max_length <= 500:
+        return "VARCHAR(500)"
+    else:
+        return "TEXT"

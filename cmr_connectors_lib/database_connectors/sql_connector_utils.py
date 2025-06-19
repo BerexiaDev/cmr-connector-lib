@@ -201,12 +201,13 @@ def cast_informix_to_postgresql_type(informix_type: int) -> str:
     return informix_to_pg.get(base_type, "TEXT")
 
 
-def cast_postgres_to_typescript(self, data_type: str) -> str:
+
+def cast_postgres_to_typescript(data_type: str) -> str:
     """
     Simple mapping from Postgres data_type/udt_name to a TS type.
     Extend this as needed.
     """
-    mapping: dict[str, str] = {
+    mapping: Dict[str, str] = {
         # numeric types
         "smallint": "number",
         "integer": "number",
@@ -237,10 +238,10 @@ def cast_postgres_to_typescript(self, data_type: str) -> str:
         "time": "string",
         "time without time zone": "string",
         "time with time zone": "string",
-        "timestamp": "Date",
-        "timestamp without time zone": "Date",
-        "timestamp with time zone": "Date",
-        "interval": "string",
+        "timestamp": "Datetime",
+        "timestamp without time zone": "Datetime",
+        "timestamp with time zone":    "Datetime",
+        "interval":                 "string",
 
         "json": "any",
         "jsonb": "any",
@@ -274,10 +275,10 @@ def cast_sqlserver_to_typescript_types(sql_type: str) -> str:
         "money": "number",
         "smallmoney": "number",
 
-        # boolean 
+        # boolean
         "bit": "boolean",
 
-        # textual 
+        # textual
         "char": "string",
         "nchar": "string",
         "varchar": "string",
@@ -295,7 +296,7 @@ def cast_sqlserver_to_typescript_types(sql_type: str) -> str:
         "rowversion": "string",
         "timestamp": "string",
 
-        # temporal 
+        # temporal
         "date": "Date",
         "time": "string",
         "datetime": "Datetime",
