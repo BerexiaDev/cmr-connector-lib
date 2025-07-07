@@ -23,9 +23,8 @@ class SqlServerConnector(SqlConnector):
             f"DATABASE={self.database};"
             f"UID={self.user};"
             f"PWD={self.password};"
-            f"Connection Timeout=10;"
         )
-        return pyodbc.connect(conn_str)
+        return pyodbc.connect(conn_str, timeout=10)
 
     def ping(self):
         """Returns True if the connection is successful, False otherwise."""

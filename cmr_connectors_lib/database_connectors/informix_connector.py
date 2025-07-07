@@ -40,7 +40,7 @@ class InformixConnector(SqlConnector):
             f"DB_LOCALE={self.locale};"       # Explicitly set database locale
             "Timeout=10;"
         )
-        conn = pyodbc.connect(conn_str)
+        conn = pyodbc.connect(conn_str, timeout=10)
         # Set decoding to ISO-8859-1 (en_US.819) for both SQL_CHAR and SQL_WCHAR
         conn.setdecoding(pyodbc.SQL_CHAR, encoding='latin1')  # ISO-8859-1 = Latin-1
         conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')  # In case of wide chars
