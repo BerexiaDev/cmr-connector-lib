@@ -26,19 +26,25 @@ class SqlConnector():
 
     def ping(self):
         """Returns True if the connection is successful, False otherwise."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
+        conn = None
+        cursor = None
+
         try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
             cursor.execute("SELECT 1")
-            cursor.fetchone()  # Ensure the query runs
-            logger.info("Database connection is active.")
-            return True
+            cursor.fetchone()  # ensure the query actually ran
         except Exception as e:
             logger.error(f"Database connection failed: {e}")
             return False
         finally:
-            cursor.close()
-            conn.close()
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+
+        logger.info("Database connection is active.")
+        return True
     
     @abstractmethod
     def get_connection_tables(self):

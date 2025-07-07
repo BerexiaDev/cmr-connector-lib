@@ -28,6 +28,7 @@ class PostgresConnector(SqlConnector):
             "password": self.password,
             "port": self.port,
             "dbname": self.database,
+            "connect_timeout": 10,
             "options" : f"-c search_path={self.schema}"
         }
 

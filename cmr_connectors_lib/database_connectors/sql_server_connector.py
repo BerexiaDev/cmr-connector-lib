@@ -23,6 +23,7 @@ class SqlServerConnector(SqlConnector):
             f"DATABASE={self.database};"
             f"UID={self.user};"
             f"PWD={self.password};"
+            f"Connection Timeout=10;"
         )
         return pyodbc.connect(conn_str)
 
