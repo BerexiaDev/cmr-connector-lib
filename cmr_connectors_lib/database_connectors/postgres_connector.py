@@ -500,29 +500,49 @@ class PostgresConnector(SqlConnector):
             if conn:
                 conn.close()
 
-    def drop_table_indexes(self, table_name: str, columns: List[str], schema = None) -> None:
+    def manage_table_indexes(
+            self,
+            table_name: str,
+            columns: List[str],
+            schema = None,
+            create: bool = True
+    ) -> None:
         """
-        Drop a separate index on each column in `columns` for the given Postgres table.
-        Index names must follow: <schema>_<table_name>_idx_<column>.
+        Create or drop a separate index on each column in `columns` for the given Postgres table.
+
+        Index names follow: <schema>_<table_name>_idx_<column>.
+
+        :param create: True to create indexes, False to drop them.
         """
         conn = None
         cursor = None
-        use_schema = schema if schema else self.schema
+        use_schema = schema or self.schema
+        qualified_table = f'"{use_schema}"."{table_name}"'
 
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
 
             for col in columns:
-                index_name = f"{table_name}_idx_{col}"
-                sql = f'DROP INDEX IF EXISTS "{index_name}";'
+                index_name = f"{use_schema}_{table_name}_idx_{col}"
+
+                if create:
+                    sql = (
+                        f'CREATE INDEX IF NOT EXISTS "{index_name}" '
+                        f'ON {qualified_table} ("{col}");'
+                    )
+                    action = "Created or verified"
+                else:
+                    sql = f'DROP INDEX IF EXISTS "{use_schema}"."{index_name}";'
+                    action = "Dropped"
+
                 cursor.execute(sql)
-                logger.info(f"Dropped index if it existed: {index_name}")
+                logger.info(f"{action} index: {index_name}")
 
             conn.commit()
 
         except Exception as e:
-            logger.error(f"Error dropping indexes on {use_schema}.{table_name}: {e}")
+            logger.error(f"Error managing indexes on {use_schema}.{table_name}: {e}")
             if conn:
                 conn.rollback()
 
