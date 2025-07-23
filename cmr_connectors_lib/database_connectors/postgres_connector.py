@@ -459,7 +459,7 @@ class PostgresConnector(SqlConnector):
                 conn.close()
 
 
-    def create_indexes(self, table_name: str, columns: List[str]) -> None:
+    def create_indexes(self, table_name: str, columns: List[str], schema=None) -> None:
         """
         Create a separate index on each column in `columns` for the given Postgres table.
 
@@ -467,14 +467,14 @@ class PostgresConnector(SqlConnector):
         """
         conn = None
         cursor = None
-
+        use_schema = schema if schema else self.schema
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
+            qualified_table = f'"{use_schema}"."{table_name}"'
 
-            qualified_table = f'"{self.schema}"."{table_name}"'
             for col in columns:
-                index_name = f"{self.schema}_{table_name}_idx_{col}"
+                index_name = f"{use_schema}_{table_name}_idx_{col}"
                 qualified_col = f'"{col}"'
                 sql = (
                     f'CREATE INDEX IF NOT EXISTS "{index_name}" '
@@ -490,7 +490,7 @@ class PostgresConnector(SqlConnector):
             conn.commit()
 
         except Exception as e:
-            logger.error(f"Error creating indexes on {self.schema}.{table_name}: {e}")
+            logger.error(f"Error creating indexes on {use_schema}.{table_name}: {e}")
             if conn:
                 conn.rollback()
 
