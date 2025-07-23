@@ -474,7 +474,7 @@ class PostgresConnector(SqlConnector):
             qualified_table = f'"{use_schema}"."{table_name}"'
 
             for col in columns:
-                index_name = f"{use_schema}_{table_name}_idx_{col}"
+                index_name = f"{table_name}_idx_{col}"
                 qualified_col = f'"{col}"'
                 sql = (
                     f'CREATE INDEX IF NOT EXISTS "{index_name}" '
@@ -491,6 +491,38 @@ class PostgresConnector(SqlConnector):
 
         except Exception as e:
             logger.error(f"Error creating indexes on {use_schema}.{table_name}: {e}")
+            if conn:
+                conn.rollback()
+
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+
+    def drop_table_indexes(self, table_name: str, columns: List[str], schema = None) -> None:
+        """
+        Drop a separate index on each column in `columns` for the given Postgres table.
+        Index names must follow: <schema>_<table_name>_idx_<column>.
+        """
+        conn = None
+        cursor = None
+        use_schema = schema if schema else self.schema
+
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            for col in columns:
+                index_name = f"{table_name}_idx_{col}"
+                sql = f'DROP INDEX IF EXISTS "{index_name}";'
+                cursor.execute(sql)
+                logger.info(f"Dropped index if it existed: {index_name}")
+
+            conn.commit()
+
+        except Exception as e:
+            logger.error(f"Error dropping indexes on {use_schema}.{table_name}: {e}")
             if conn:
                 conn.rollback()
 
