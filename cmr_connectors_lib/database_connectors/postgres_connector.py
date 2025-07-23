@@ -524,7 +524,7 @@ class PostgresConnector(SqlConnector):
             cursor = conn.cursor()
 
             for col in columns:
-                index_name = f"{use_schema}_{table_name}_idx_{col}"
+                index_name = f"idx_{use_schema}_{table_name}_{col}"
 
                 if create:
                     sql = (
