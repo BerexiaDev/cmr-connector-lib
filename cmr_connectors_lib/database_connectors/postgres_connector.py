@@ -457,3 +457,45 @@ class PostgresConnector(SqlConnector):
                 cursor.close()
             if conn:
                 conn.close()
+
+
+    def create_indexes(self, table_name: str, columns: List[str]) -> None:
+        """
+        Create a separate index on each column in `columns` for the given Postgres table.
+
+        Index names will be: <schema>_<table_name>_idx_<column>.
+        """
+        conn = None
+        cursor = None
+
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            qualified_table = f'"{self.schema}"."{table_name}"'
+            for col in columns:
+                index_name = f"{self.schema}_{table_name}_idx_{col}"
+                qualified_col = f'"{col}"'
+                sql = (
+                    f'CREATE INDEX IF NOT EXISTS "{index_name}" '
+                    f'ON {qualified_table} ({qualified_col});'
+                )
+
+                try:
+                    cursor.execute(sql)
+                    logger.info(f"✔ Created or verified index: {index_name}")
+                except Exception as idx_err:
+                    logger.error(f"✘ Failed to create index {index_name}: {idx_err}")
+
+            conn.commit()
+
+        except Exception as e:
+            logger.error(f"Error creating indexes on {self.schema}.{table_name}: {e}")
+            if conn:
+                conn.rollback()
+
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
