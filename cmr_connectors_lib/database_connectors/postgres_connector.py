@@ -311,9 +311,14 @@ class PostgresConnector(SqlConnector):
         create_stmt = f'CREATE TABLE IF NOT EXISTS "{schema_name}"."{table_name}" (\n  {columns_sql}\n);'
         index_stmt = None
         if index_keys:
-            index_name = f"idx_{schema_name}_{table_name}_{'_'.join(index_keys)}"
-            cols_sql = ", ".join(index_keys)
-            index_stmt = f"CREATE INDEX IF NOT EXISTS {index_name} ON {schema_name}.{table_name} ({cols_sql});"
+            index_statements = [
+                (
+                    f'CREATE INDEX IF NOT EXISTS "idx_{schema_name}_{table_name}_{col}" '
+                    f'ON "{schema_name}"."{table_name}" ("{col}")'
+                )
+                for col in index_keys
+            ]
+            index_stmt = ";\n".join(index_statements) + ";"
 
         return create_stmt, index_stmt
 
@@ -452,6 +457,59 @@ class PostgresConnector(SqlConnector):
             if conn:
                 conn.rollback()
             return False
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+
+
+    def manage_table_indexes(
+            self,
+            table_name: str,
+            columns: List[str],
+            schema = None,
+            create: bool = True
+    ) -> None:
+        """
+        Create or drop a separate index on each column in `columns` for the given Postgres table.
+
+        Index names follow: <schema>_<table_name>_idx_<column>.
+
+        :param create: True to create indexes, False to drop them.
+        """
+        conn = None
+        cursor = None
+        use_schema = schema or self.schema
+        qualified_table = f'"{use_schema}"."{table_name}"'
+
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            for col in columns:
+                index_name = f"idx_{use_schema}_{table_name}_{col}"
+
+                if create:
+                    sql = (
+                        f'CREATE INDEX IF NOT EXISTS "{index_name}" '
+                        f'ON {qualified_table} ("{col}");'
+                    )
+                    action = "Created or verified"
+                else:
+                    sql = f'DROP INDEX IF EXISTS "{use_schema}"."{index_name}";'
+                    action = "Dropped"
+
+                cursor.execute(sql)
+                logger.info(f"{action} index: {index_name}")
+
+            conn.commit()
+
+        except Exception as e:
+            logger.error(f"Error managing indexes on {use_schema}.{table_name}: {e}")
+            if conn:
+                conn.rollback()
+
         finally:
             if cursor:
                 cursor.close()
