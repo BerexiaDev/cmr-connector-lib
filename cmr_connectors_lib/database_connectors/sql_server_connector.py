@@ -231,10 +231,10 @@ class SqlServerConnector(SqlConnector):
                 SELECT *,
                        ROW_NUMBER() OVER (
                            PARTITION BY {primary_key}
-                           ORDER BY op_timestamp DESC
+                           ORDER BY Date_operation DESC
                        ) AS rn
                 FROM {log_table}
-                WHERE op_timestamp > ?
+                WHERE Date_operation > ?
             ) AS ranked
             WHERE rn = 1
             ORDER BY {primary_key}

@@ -372,9 +372,9 @@ class PostgresConnector(SqlConnector):
         sql = f"""
             SELECT DISTINCT ON ({primary_key}) *
             FROM {log_table}
-            WHERE op_timestamp > %s
+            WHERE Date_operation > %s
             ORDER BY {primary_key}, 
-            op_timestamp DESC
+            Date_operation DESC
             LIMIT %s OFFSET %s;
         """
         offset = 0

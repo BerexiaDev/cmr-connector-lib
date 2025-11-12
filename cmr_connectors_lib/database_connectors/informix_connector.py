@@ -317,13 +317,13 @@ class InformixConnector(SqlConnector):
         sql = f"""
                 SELECT SKIP ? FIRST ? *
                 FROM {log_table} lt1
-                WHERE op_timestamp = (
-                    SELECT MAX(op_timestamp)
+                WHERE Date_operation = (
+                    SELECT MAX(Date_operation)
                     FROM {log_table} lt2
                     WHERE lt2.id = lt1.{primary_key}
-                    AND lt2.op_timestamp > ?
+                    AND lt2.Date_operation > ?
                 )
-                AND op_timestamp > ?
+                AND Date_operation > ?
                 ORDER BY {primary_key};
            """
         offset = 0
