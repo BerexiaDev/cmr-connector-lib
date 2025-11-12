@@ -227,7 +227,7 @@ class SqlServerConnector(SqlConnector):
     def fetch_deltas(
         self,
         cursor,
-        primary_keys: list[str],
+        primary_keys: List[str],
         log_table: str,
         since_ts: datetime,
         batch_size: int = 10_000,
