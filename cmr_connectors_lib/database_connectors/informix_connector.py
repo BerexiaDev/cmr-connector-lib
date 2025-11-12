@@ -1,9 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from datetime import datetime
-
+from typing import List, Dict
 import pyodbc
-from typing import Dict, Any
 from loguru import logger
 from pyodbc import Cursor
 
@@ -313,19 +312,31 @@ class InformixConnector(SqlConnector):
             cursor.close()
             conn.close()
 
-    def fetch_deltas(self, cursor, primary_key: str, log_table: str, since_ts: datetime, batch_size: int = 10_000):
+    def fetch_deltas(
+        self,
+        cursor,
+        primary_keys: List[str],
+        log_table: str,
+        since_ts: datetime,
+        batch_size: int = 10_000,
+    ):
+        # Build composite key condition and ORDER BY
+        pk_match = " AND ".join(f"lt2.{pk} = lt1.{pk}" for pk in primary_keys)
+        order_by = ", ".join(primary_keys)
+
         sql = f"""
-                SELECT SKIP ? FIRST ? *
-                FROM {log_table} lt1
-                WHERE Date_operation = (
-                    SELECT MAX(Date_operation)
-                    FROM {log_table} lt2
-                    WHERE lt2.id = lt1.{primary_key}
-                    AND lt2.Date_operation > ?
-                )
-                AND Date_operation > ?
-                ORDER BY {primary_key};
-           """
+            SELECT SKIP ? FIRST ? *
+            FROM {log_table} lt1
+            WHERE lt1.Date_operation = (
+                SELECT MAX(lt2.Date_operation)
+                FROM {log_table} lt2
+                WHERE {pk_match}
+                AND lt2.Date_operation > ?
+            )
+            AND lt1.Date_operation > ?
+            ORDER BY {order_by};
+        """
+
         offset = 0
         while True:
             cursor.execute(sql, (offset, batch_size, since_ts, since_ts))
@@ -333,9 +344,8 @@ class InformixConnector(SqlConnector):
             if not rows:
                 break
 
-            col_names = [c[0] for c in cursor.description]  # once per batch
+            col_names = [c[0] for c in cursor.description]
             for tup in rows:
-                res = dict(zip(col_names, tup))
-                yield res
+                yield dict(zip(col_names, tup))
 
             offset += batch_size

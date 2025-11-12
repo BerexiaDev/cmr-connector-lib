@@ -224,23 +224,37 @@ class SqlServerConnector(SqlConnector):
             cursor.close()
             conn.close()
 
-    def fetch_deltas(self, cursor, primary_key: str, log_table: str, since_ts: datetime, batch_size: int = 10_000):
+    def fetch_deltas(
+        self,
+        cursor,
+        primary_keys: list[str],
+        log_table: str,
+        since_ts: datetime,
+        batch_size: int = 10_000,
+    ):
+        # Build composite expressions
+        pk_cols = ", ".join(primary_keys)                          # ex: "siren, code"
+        partition_expr = pk_cols                                   # PARTITION BY siren, code
+        order_expr = "Date_operation DESC"                         # always the same
+        order_by_final = ", ".join(primary_keys)                   # ORDER BY siren, code
+
         sql = f"""
             SELECT *
             FROM (
                 SELECT *,
-                       ROW_NUMBER() OVER (
-                           PARTITION BY {primary_key}
-                           ORDER BY Date_operation DESC
-                       ) AS rn
+                    ROW_NUMBER() OVER (
+                        PARTITION BY {partition_expr}
+                        ORDER BY {order_expr}
+                    ) AS rn
                 FROM {log_table}
                 WHERE Date_operation > ?
             ) AS ranked
             WHERE rn = 1
-            ORDER BY {primary_key}
+            ORDER BY {order_by_final}
             OFFSET ? ROWS
             FETCH NEXT ? ROWS ONLY;
         """
+
         offset = 0
         while True:
             cursor.execute(sql, (since_ts, offset, batch_size))
@@ -248,7 +262,7 @@ class SqlServerConnector(SqlConnector):
             if not rows:
                 break
 
-            col_names = [desc[0] for desc in cursor.description]
+            col_names = [col[0] for col in cursor.description]
             for row in rows:
                 yield dict(zip(col_names, row))
 
