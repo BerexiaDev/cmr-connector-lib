@@ -4,7 +4,7 @@ import re, psycopg2
 from datetime import datetime
 
 from loguru import logger
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 from pyodbc import Cursor
 
 from .sql_connector import SqlConnector
@@ -509,6 +509,90 @@ class PostgresConnector(SqlConnector):
             logger.error(f"Error managing indexes on {use_schema}.{table_name}: {e}")
             if conn:
                 conn.rollback()
+
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+
+    def manage_table_primary_keys(
+            self,
+            table_name: str,
+            columns: List[str],
+            schema = None,
+            create: bool = True
+    ) -> Tuple[Dict[str, str], int]:
+        """
+        Create or drop a primary key constraint for the given Postgres table.
+
+        :param columns: The columns that compose the primary key when create=True.
+        :param create: True to recreate the primary key, False to drop it.
+        :return: (response_dict, status_code)
+        """
+        use_schema = schema or self.schema
+        qualified_table = f'"{use_schema}"."{table_name}"'
+        constraint_name = f"pk_{use_schema}_{table_name}"
+
+        if create and not columns:
+            logger.error(
+                f"Cannot create primary key on {use_schema}.{table_name}: no columns provided."
+            )
+            return {"status": "error", "message": "Failed to create data mart connector"}, 500
+
+        conn = None
+        cursor = None
+
+        def _drop_existing_constraints() -> List[str]:
+            cursor.execute(
+                """
+                SELECT constraint_name
+                FROM information_schema.table_constraints
+                WHERE table_schema = %s
+                  AND table_name = %s
+                  AND constraint_type = 'PRIMARY KEY';
+                """,
+                (use_schema, table_name),
+            )
+            constraints = [row[0] for row in cursor.fetchall()]
+            for existing_constraint in constraints:
+                drop_sql = (
+                    f'ALTER TABLE {qualified_table} '
+                    f'DROP CONSTRAINT IF EXISTS "{existing_constraint}";'
+                )
+                cursor.execute(drop_sql)
+                logger.info(f"Dropped primary key constraint: {existing_constraint}")
+            return constraints
+
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            if create:
+                _drop_existing_constraints()
+                columns_list = ", ".join(f'"{col}"' for col in columns)
+                create_sql = (
+                    f'ALTER TABLE {qualified_table} '
+                    f'ADD CONSTRAINT "{constraint_name}" PRIMARY KEY ({columns_list});'
+                )
+                cursor.execute(create_sql)
+                logger.info(f"Created primary key constraint: {constraint_name}")
+                message = f"Primary key created for columns: {', '.join(columns)}"
+            else:
+                dropped = _drop_existing_constraints()
+                if dropped:
+                    message = f"Dropped primary key constraint(s): {', '.join(dropped)}"
+                else:
+                    message = "No primary key found to drop"
+
+            conn.commit()
+            return {"status": "success", "message": message}, 200
+
+        except Exception as e:
+            logger.error(f"Error managing primary keys on {use_schema}.{table_name}: {e}")
+            if conn:
+                conn.rollback()
+            return {"status": "error", "message": "Failed to create data mart connector"}, 500
 
         finally:
             if cursor:
