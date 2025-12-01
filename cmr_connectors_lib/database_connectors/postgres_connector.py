@@ -299,8 +299,8 @@ class PostgresConnector(SqlConnector):
 
             column_defs.append(" ".join(col_def_parts))
 
-            if is_pk:
-                primary_keys.append(f'"{col_name}"')
+            # if is_pk:
+            #     primary_keys.append(f'"{col_name}"')
 
         # Append primary key constraint
         if primary_keys:
