@@ -181,6 +181,7 @@ class SqlServerConnector(SqlConnector):
 
             rows = cursor.execute(schema_sql, table_name, table_name, table_name, table_name).fetchall()
             result = []
+            seen = set()
             for row in rows:
                 sql_type = row.data_type.upper()
 
@@ -202,6 +203,14 @@ class SqlServerConnector(SqlConnector):
                 # Otherwise, handle fixed-length or length‐bounded
                 else:
                     pg_type = cast_sqlserver_to_postgresql_type(row.data_type)
+
+                # Unique key for dedupe (column name case-insensitive)
+                key = row.name.lower()
+                if key in seen:
+                    logger.warning(f"Duplicate column '{row.name}' in table {table_name}, skipping")
+                    continue
+
+                seen.add(key)
 
                 result.append({
                     "position": row.column_id,
