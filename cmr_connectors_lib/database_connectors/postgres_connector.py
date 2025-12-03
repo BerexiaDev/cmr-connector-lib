@@ -35,8 +35,8 @@ class PostgresConnector(SqlConnector):
 
         return psycopg2.connect(**conn_params)
 
-
-    def extract_data_batch( self, table_name: str, offset: int = 0, limit: int = 100, filters=None) -> List[Dict[str, Any]]:
+    def _build_filters_clause(self, filters) -> Tuple[str, List[Any]]:
+        """Parse filters payload into a safe WHERE clause and parameters."""
         parsed_filters = []
         if isinstance(filters, str):
             filters_str = filters.strip()
@@ -136,12 +136,17 @@ class PostgresConnector(SqlConnector):
                     params.append(value)
 
         where_clause = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        return where_clause, params
+
+
+    def extract_data_batch( self, table_name: str, offset: int = 0, limit: int = 100, filters=None) -> List[Dict[str, Any]]:
+        where_clause, params = self._build_filters_clause(filters)
         query = (
             f"SELECT * FROM {table_name}"
             f"{where_clause} "
             f"OFFSET {offset} LIMIT {limit};"
         )
-        logger.info(f"Fetching batch: table={table_name}, offset={offset}, limit={limit}, filters_applied={bool(clauses)}")
+        logger.info(f"Fetching batch: table={table_name}, offset={offset}, limit={limit}, filters_applied={bool(where_clause.strip())}")
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -222,11 +227,12 @@ class PostgresConnector(SqlConnector):
             conn.close()
 
 
-    def count_table_rows(self, table_name: str) -> int:
+    def count_table_rows(self, table_name: str, filters=None) -> int:
+        where_clause, params = self._build_filters_clause(filters)
         connection = self.get_connection()
         cursor = connection.cursor()
         try:
-            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+            cursor.execute(f"SELECT COUNT(*) FROM {table_name}{where_clause}", params)
             count_result = cursor.fetchone()
             total_count = int(count_result[0]) if count_result else 0
             return total_count
