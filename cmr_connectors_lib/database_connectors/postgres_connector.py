@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+import json
 import re, psycopg2
 from datetime import datetime
 
@@ -35,16 +36,116 @@ class PostgresConnector(SqlConnector):
         return psycopg2.connect(**conn_params)
 
 
-    def extract_data_batch( self, table_name: str, offset: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+    def extract_data_batch( self, table_name: str, offset: int = 0, limit: int = 100, filters=None) -> List[Dict[str, Any]]:
+        parsed_filters = []
+        if isinstance(filters, str):
+            filters_str = filters.strip()
+            if filters_str:
+                try:
+                    parsed_filters = json.loads(filters_str)
+                    if not isinstance(parsed_filters, list):
+                        logger.error("Filters must be a JSON array; ignoring filters.")
+                        parsed_filters = []
+                except json.JSONDecodeError as exc:
+                    logger.error(f"Invalid filters JSON provided; ignoring filters. {exc}")
+            else:
+                logger.warning("Empty filters string provided; ignoring filters.")
+        elif isinstance(filters, list):
+            parsed_filters = filters
+        elif filters is not None:
+            logger.error("Filters must be a JSON string or list; ignoring filters.")
+
+        clauses: List[str] = []
+        params: List[Any] = []
+        if parsed_filters:
+            op_map = {
+                "CONTAINS": ("LIKE", lambda v: f"%{v}%"),
+                "NOT_CONTAINS": ("NOT LIKE", lambda v: f"%{v}%"),
+                "NOT_CONTAIN": ("NOT LIKE", lambda v: f"%{v}%"),
+                "STARTS_WITH": ("LIKE", lambda v: f"{v}%"),
+                "ENDS_WITH": ("LIKE", lambda v: f"%{v}"),
+                "MATCHES": ("~", lambda v: v),
+                "NOT_MATCHES": ("!~", lambda v: v),
+                "=": "=",
+                "EQUALS": "=",
+                "!=": "!=",
+                "NOT_EQUALS": "!=",
+                ">": ">",
+                "GREATER_THAN": ">",
+                "<": "<",
+                "LESS_THAN": "<",
+                ">=": ">=",
+                "GREATER_THAN_OR_EQUAL": ">=",
+                "<=": "<=",
+                "LESS_THAN_OR_EQUAL": "<=",
+                "BETWEEN": "BETWEEN",
+                "NOT_BETWEEN": "NOT BETWEEN",
+                "IN": "IN",
+                "NOT_IN": "NOT IN",
+                "IS_NULL": "IS NULL",
+                "IS_NOT_NULL": "IS NOT NULL",
+            }
+
+            for condition in parsed_filters:
+                col_info = condition.get("column") or {}
+                col_name = col_info.get("name")
+                if not col_name or not isinstance(col_name, str) or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", col_name):
+                    logger.warning(f"Skipping filter with invalid column name: {col_name}")
+                    continue
+
+                raw_operator = condition.get("operator")
+                op_key = str(raw_operator).strip().upper().replace(" ", "_") if raw_operator else None
+                sql_op = op_map.get(op_key) if op_key else None
+                if not sql_op:
+                    logger.warning(f"Skipping unsupported operator '{raw_operator}' for column '{col_name}'")
+                    continue
+
+                value = condition.get("value")
+                value_to = condition.get("valueTo")
+
+                if op_key in ("BETWEEN", "NOT_BETWEEN"):
+                    if value is None or value_to is None:
+                        logger.warning(f"Skipping BETWEEN filter for '{col_name}' because bounds are missing.")
+                        continue
+                    clauses.append(f"\"{col_name}\" {sql_op} %s AND %s")
+                    params.extend([value, value_to])
+                elif op_key in ("IN", "NOT_IN"):
+                    values = value
+                    if isinstance(values, str):
+                        values = [v.strip() for v in values.split(",") if v.strip()]
+                    if not isinstance(values, list) or not values:
+                        logger.warning(f"Skipping IN filter for '{col_name}' due to empty values.")
+                        continue
+                    placeholders = ", ".join(["%s"] * len(values))
+                    clauses.append(f"\"{col_name}\" {sql_op} ({placeholders})")
+                    params.extend(values)
+                elif op_key in ("IS_NULL", "IS_NOT_NULL"):
+                    clauses.append(f"\"{col_name}\" {sql_op}")
+                elif isinstance(sql_op, tuple):
+                    sql_operator, pattern_builder = sql_op
+                    if value is None:
+                        logger.warning(f"Skipping filter for '{col_name}' because value is missing.")
+                        continue
+                    clauses.append(f"\"{col_name}\" {sql_operator} %s")
+                    params.append(pattern_builder(value))
+                else:
+                    if value is None:
+                        logger.warning(f"Skipping filter for '{col_name}' because value is missing.")
+                        continue
+                    clauses.append(f"\"{col_name}\" {sql_op} %s")
+                    params.append(value)
+
+        where_clause = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         query = (
-            f"SELECT * FROM {table_name} "
+            f"SELECT * FROM {table_name}"
+            f"{where_clause} "
             f"OFFSET {offset} LIMIT {limit};"
         )
-        logger.info(f"Fetching batch: table={table_name}, offset={offset}, limit={limit}")
+        logger.info(f"Fetching batch: table={table_name}, offset={offset}, limit={limit}, filters_applied={bool(clauses)}")
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute(query)
+            cursor.execute(query, params)
             cols = [c[0] for c in cursor.description]
             return [
                 {col: safe_convert_to_string(row[idx]) for idx, col in enumerate(cols)}
