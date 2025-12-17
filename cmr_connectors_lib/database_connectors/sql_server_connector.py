@@ -82,23 +82,23 @@ class SqlServerConnector(SqlConnector):
             return []
 
     def stream_batch(self, cursor: pyodbc.Cursor, table_name: str, batch_size: int = 10_000):
-    """
-    Full-sync streaming: sequentially fetch rows without OFFSET.
-    Works best for reloads (truncate + reload). Not suitable for resume.
-    """
-    try:
-        cursor.arraysize = batch_size
-        cursor.execute(f"SELECT * FROM {table_name};")
-
-        while True:
-            rows = cursor.fetchmany(batch_size)
-            if not rows:
-                break
-            yield rows
-
-    except Exception as exc:
-        logger.error(f"Error streaming batch from {table_name}: {exc}")
-        return
+        """
+        Full-sync streaming: sequentially fetch rows without OFFSET.
+        Works best for reloads (truncate + reload). Not suitable for resume.
+        """
+        try:
+            cursor.arraysize = batch_size
+            cursor.execute(f"SELECT * FROM {table_name};")
+    
+            while True:
+                rows = cursor.fetchmany(batch_size)
+                if not rows:
+                    break
+                yield rows
+    
+        except Exception as exc:
+            logger.error(f"Error streaming batch from {table_name}: {exc}")
+            return
 
 
     def get_connection_tables(self):
