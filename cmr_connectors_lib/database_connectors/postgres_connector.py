@@ -173,6 +173,41 @@ class PostgresConnector(SqlConnector):
             logger.error(f"Error fetching batch from {table_name}: {str(e)}")
             return []
 
+    def stream_batch(self, table_name: str, batch_size: int = 10_000,):
+        """
+        Full-sync streaming for Postgres using a server-side cursor.
+        Avoids OFFSET and prevents loading the full result set into memory.
+        """
+        conn = None
+        cursor = None
+        cursor_name = f"stream_{table_name.replace('.', '_')}"
+
+        try:
+            conn = self.get_connection()
+            # IMPORTANT: server-side cursors require an open transaction
+            cursor = conn.cursor(name=cursor_name)
+            cursor.itersize = batch_size
+
+            logger.info(f"Start streaming Postgres table {table_name} with batch_size={batch_size}")
+            cursor.execute(f"SELECT * FROM {table_name}")
+
+            while True:
+                rows = cursor.fetchmany(batch_size)
+                if not rows:
+                    break
+                yield rows
+
+            logger.info(f"Finished streaming Postgres table {table_name}")
+
+        except Exception as exc:
+            logger.error(f"Error streaming batch from Postgres table {table_name}: {exc}")
+            return
+
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
     def get_connection_tables(self):
         conn = self.get_connection()
