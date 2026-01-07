@@ -278,6 +278,29 @@ class PostgresConnector(SqlConnector):
             cursor.close()
             connection.close()
 
+    def get_min_max_date(self, table_name: str, column_name: str):
+        """
+        Returns (min_value, max_value) for a DATE/TIMESTAMP column in a Postgres table.
+        Assumes table_name / column_name are valid identifiers (same assumption as other methods).
+        """
+        self._validate_identifier(table_name, "table")
+        self._validate_identifier(column_name, "column")
+
+        conn = self.get_connection()
+        cur = conn.cursor()
+        try:
+            sql = (
+                f'SELECT MIN("{column_name}"), MAX("{column_name}") '
+                f'FROM {table_name} '
+                f'WHERE "{column_name}" IS NOT NULL;'
+            )
+            cur.execute(sql)
+            row = cur.fetchone()
+            return (row[0], row[1]) if row else (None, None)
+        finally:
+            cur.close()
+            conn.close()
+
     def extract_table_schema(self, table_name):
         conn = self.get_connection()
         cursor = conn.cursor()
