@@ -379,21 +379,24 @@ class InformixConnector(SqlConnector):
         """
         Returns (min_value, max_value) for a DATE / DATETIME column
         in an Informix table.
+
+        Column and table names may contain spaces or mixed case,
+        so identifiers are always quoted.
         """
 
         conn = self.get_connection()
         cursor = conn.cursor()
 
         try:
-            sql = f"""
+            sql = f'''
                 SELECT
-                    MIN({column_name}) AS min_val,
-                    MAX({column_name}) AS max_val
-                FROM {table_name}
-                WHERE {column_name} IS NOT NULL
-            """
+                    MIN("{column_name}") AS min_val,
+                    MAX("{column_name}") AS max_val
+                FROM "{table_name}"
+                WHERE "{column_name}" IS NOT NULL
+            '''
 
-            logger.info(f"Getting min/max for {table_name}.{column_name}")
+            logger.info(f'Getting min/max for "{table_name}"."{column_name}"')
             cursor.execute(sql)
             row = cursor.fetchone()
 
@@ -404,7 +407,7 @@ class InformixConnector(SqlConnector):
 
         except Exception as e:
             logger.error(
-                f"Error getting min/max for {table_name}.{column_name}: {str(e)}",
+                f'Error getting min/max for "{table_name}"."{column_name}": {e}',
                 exc_info=True
             )
             raise

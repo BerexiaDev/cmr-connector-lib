@@ -283,8 +283,6 @@ class PostgresConnector(SqlConnector):
         Returns (min_value, max_value) for a DATE/TIMESTAMP column in a Postgres table.
         Assumes table_name / column_name are valid identifiers (same assumption as other methods).
         """
-        self._validate_identifier(table_name, "table")
-        self._validate_identifier(column_name, "column")
 
         conn = self.get_connection()
         cur = conn.cursor()
@@ -419,13 +417,6 @@ class PostgresConnector(SqlConnector):
             cursor.close()
             conn.close()
 
-    def _validate_identifier(self, name: str, what: str = "identifier") -> None:
-        """
-        Ensure schema/table/column identifiers are safe (no injection via DDL identifiers).
-        """
-        if not name or not isinstance(name, str) or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
-            raise ValueError(f"Invalid {what}: {name}")
-
     def build_create_partitioned_table_statement(
         self,
         table_name: str,
@@ -442,9 +433,6 @@ class PostgresConnector(SqlConnector):
         Returns: (create_stmt, index_stmt) like build_create_table_statement()
         NOTE: index_stmt is returned as-is; we can decide later how to handle indexes for partitions.
         """
-        self._validate_identifier(schema_name, "schema")
-        self._validate_identifier(table_name, "table")
-        self._validate_identifier(partition_column, "partition column")
 
         method = (partition_method or "RANGE").upper()
         if method not in ("RANGE", "LIST", "HASH"):
@@ -469,8 +457,6 @@ class PostgresConnector(SqlConnector):
         return f"{parent_table}__p_{partition_column}__{safe_label}".lower()
 
     def create_default_partition(self, schema_name: str, parent_table: str) -> None:
-        self._validate_identifier(schema_name, "schema")
-        self._validate_identifier(parent_table, "table")
 
         default_table = f"{parent_table}__p_default".lower()
         sql_txt = (
@@ -506,9 +492,6 @@ class PostgresConnector(SqlConnector):
           - year:  ["2000","2001",...]
           - month: ["2025-01","2025-02",...]
         """
-        self._validate_identifier(schema_name, "schema")
-        self._validate_identifier(parent_table, "table")
-        self._validate_identifier(partition_column, "partition column")
 
         strat = (strategy or "").strip().lower()
         if strat not in ("year", "month"):

@@ -160,13 +160,14 @@ class SqlServerConnector(SqlConnector):
         """
         Returns (min_value, max_value) for a DATE/DATETIME column in SQL Server.
         """
-
         conn = self.get_connection()
         cur = conn.cursor()
         try:
             sql = f"""
-                SELECT MIN([{column_name}]) AS min_val, MAX([{column_name}]) AS max_val
-                FROM {table_name}
+                SELECT
+                    MIN([{column_name}]) AS min_val,
+                    MAX([{column_name}]) AS max_val
+                FROM [{table_name}]
                 WHERE [{column_name}] IS NOT NULL;
             """
             cur.execute(sql)
