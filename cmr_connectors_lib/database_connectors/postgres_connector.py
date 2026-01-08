@@ -423,25 +423,30 @@ class PostgresConnector(SqlConnector):
         schema_name: str,
         columns: list,
         partition_column: str,
+        partition_key: str,                 # NEW
         partition_method: str = "RANGE",
     ):
         """
-        Build CREATE TABLE for a partitioned parent table.
-        Uses the same column definition logic as build_create_table_statement(),
-        but appends: PARTITION BY <method> ("<partition_column>")
-
-        Returns: (create_stmt, index_stmt) like build_create_table_statement()
-        NOTE: index_stmt is returned as-is; we can decide later how to handle indexes for partitions.
+        Build CREATE TABLE for a partitioned parent table, with a composite PK:
+        PRIMARY KEY (partition_key, partition_column)
+        then append:
+        PARTITION BY <method> ("<partition_column>")
         """
-
         method = (partition_method or "RANGE").upper()
         if method not in ("RANGE", "LIST", "HASH"):
             raise ValueError(f"Unsupported partition method: {method}")
 
         create_stmt, index_stmt = self.build_create_table_statement(table_name, schema_name, columns)
 
+        # Inject composite PRIMARY KEY before closing ');'
+        pk_sql = f'PRIMARY KEY ("{partition_key}", "{partition_column}")'
+        create_stmt = re.sub(
+            r"\n\);\s*$",
+            f"\n,  {pk_sql}\n);",
+            create_stmt,
+        )
+
         # Transform the ending ");" into ") PARTITION BY ...;"
-        # Assumes build_create_table_statement ends with '\n);'
         create_stmt = re.sub(
             r"\n\);\s*$",
             f'\n) PARTITION BY {method} ("{partition_column}");',
