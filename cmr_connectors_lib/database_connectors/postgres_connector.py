@@ -278,6 +278,27 @@ class PostgresConnector(SqlConnector):
             cursor.close()
             connection.close()
 
+    def get_min_max_date(self, table_name: str, column_name: str):
+        """
+        Returns (min_value, max_value) for a DATE/TIMESTAMP column in a Postgres table.
+        Assumes table_name / column_name are valid identifiers (same assumption as other methods).
+        """
+
+        conn = self.get_connection()
+        cur = conn.cursor()
+        try:
+            sql = (
+                f'SELECT MIN("{column_name}"), MAX("{column_name}") '
+                f'FROM {table_name} '
+                f'WHERE "{column_name}" IS NOT NULL;'
+            )
+            cur.execute(sql)
+            row = cur.fetchone()
+            return (row[0], row[1]) if row else (None, None)
+        finally:
+            cur.close()
+            conn.close()
+
     def extract_table_schema(self, table_name):
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -394,6 +415,133 @@ class PostgresConnector(SqlConnector):
             conn.rollback()
         finally:
             cursor.close()
+            conn.close()
+
+    def build_create_partitioned_table_statement(
+        self,
+        table_name: str,
+        schema_name: str,
+        columns: list,
+        partition_column: str,
+        partition_key: str,                 # NEW
+        partition_method: str = "RANGE",
+    ):
+        """
+        Build CREATE TABLE for a partitioned parent table, with a composite PK:
+        PRIMARY KEY (partition_key, partition_column)
+        then append:
+        PARTITION BY <method> ("<partition_column>")
+        """
+        method = (partition_method or "RANGE").upper()
+        if method not in ("RANGE", "LIST", "HASH"):
+            raise ValueError(f"Unsupported partition method: {method}")
+
+        create_stmt, index_stmt = self.build_create_table_statement(table_name, schema_name, columns)
+
+        # Inject composite PRIMARY KEY before closing ');'
+        pk_sql = f'PRIMARY KEY ("{partition_key}", "{partition_column}")'
+        create_stmt = re.sub(
+            r"\n\);\s*$",
+            f"\n,  {pk_sql}\n);",
+            create_stmt,
+        )
+
+        # Transform the ending ");" into ") PARTITION BY ...;"
+        create_stmt = re.sub(
+            r"\n\);\s*$",
+            f'\n) PARTITION BY {method} ("{partition_column}");',
+            create_stmt,
+        )
+
+        return create_stmt, index_stmt
+
+
+    def _partition_table_name(self, parent_table: str, partition_column: str, label: str) -> str:
+        # make label safe for identifiers (e.g. "2025-01" -> "2025_01")
+        safe_label = re.sub(r"[^A-Za-z0-9_]", "_", str(label))
+        return f"{parent_table}__p_{partition_column}__{safe_label}".lower()
+
+    def create_default_partition(self, schema_name: str, parent_table: str) -> None:
+
+        default_table = f"{parent_table}__p_default".lower()
+        sql_txt = (
+            f'CREATE TABLE IF NOT EXISTS "{schema_name}"."{default_table}" '
+            f'PARTITION OF "{schema_name}"."{parent_table}" DEFAULT;'
+        )
+
+        conn = self.get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(sql_txt)
+            conn.commit()
+            logger.info(f"Ensured DEFAULT partition: {schema_name}.{default_table}")
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed creating DEFAULT partition for {schema_name}.{parent_table}: {e}")
+            raise
+        finally:
+            cur.close()
+            conn.close()
+
+    def create_range_partitions_year_month(
+        self,
+        schema_name: str,
+        parent_table: str,
+        partition_column: str,
+        strategy: str,
+        ranges: List[str],
+    ) -> None:
+        """
+        Create RANGE partitions for strategy in {"year","month"}.
+        ranges:
+          - year:  ["2000","2001",...]
+          - month: ["2025-01","2025-02",...]
+        """
+
+        strat = (strategy or "").strip().lower()
+        if strat not in ("year", "month"):
+            raise ValueError(f"Unsupported partition strategy: {strategy}")
+
+        if not ranges:
+            raise ValueError(f"Partition enabled but ranges list is empty for {schema_name}.{parent_table}")
+
+        conn = self.get_connection()
+        cur = conn.cursor()
+        try:
+            for label in ranges:
+                if strat == "year":
+                    # label: YYYY
+                    start = datetime.strptime(str(label), "%Y").date()
+                    end = datetime.strptime(str(int(label) + 1), "%Y").date()
+                else:
+                    # label: YYYY-MM
+                    start = datetime.strptime(str(label), "%Y-%m").date()
+                    y, m = start.year, start.month
+                    if m == 12:
+                        end = datetime(y + 1, 1, 1).date()
+                    else:
+                        end = datetime(y, m + 1, 1).date()
+
+                part_table = self._partition_table_name(parent_table, partition_column, str(label))
+
+                create_part_sql = (
+                    f'CREATE TABLE IF NOT EXISTS "{schema_name}"."{part_table}" '
+                    f'PARTITION OF "{schema_name}"."{parent_table}" '
+                    f"FOR VALUES FROM ('{start.isoformat()}') TO ('{end.isoformat()}');"
+                )
+                cur.execute(create_part_sql)
+
+            conn.commit()
+            logger.info(
+                f"Created/verified {len(ranges)} partitions for {schema_name}.{parent_table} "
+                f"on {partition_column} strategy={strat}"
+            )
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed creating partitions for {schema_name}.{parent_table}: {e}")
+            raise
+        finally:
+            cur.close()
             conn.close()
 
 
