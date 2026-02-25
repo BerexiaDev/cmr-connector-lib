@@ -3,6 +3,7 @@
 from datetime import datetime
 from typing import List, Dict, Any, Iterator
 
+import jpype
 import jaydebeapi
 from loguru import logger
 
@@ -22,6 +23,12 @@ class Db2As400Connector(SqlConnector):
         self.driver_path = "app/main/drivers/jt400-20.0.7.jar"
 
     def get_connection(self):
+        if not jpype.isJVMStarted():
+            jpype.startJVM(
+                jpype.getDefaultJVMPath(),
+                f"-Djava.class.path={self.driver_path}",
+                "-Djava.awt.headless=true",
+            )
         jdbc_url = f"jdbc:as400://{self.host}/{self.schema};prompt=false"
         return jaydebeapi.connect(
             "com.ibm.as400.access.AS400JDBCDriver",
