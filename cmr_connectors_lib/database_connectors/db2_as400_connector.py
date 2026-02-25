@@ -22,7 +22,7 @@ class Db2As400Connector(SqlConnector):
         self.driver_path = "app/main/drivers/jt400-20.0.7.jar"
 
     def get_connection(self):
-        jdbc_url = f"jdbc:as400://{self.host}/{self.schema}"
+        jdbc_url = f"jdbc:as400://{self.host}/{self.schema};prompt=false"
         return jaydebeapi.connect(
             "com.ibm.as400.access.AS400JDBCDriver",
             jdbc_url,
