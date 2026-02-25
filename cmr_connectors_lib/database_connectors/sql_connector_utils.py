@@ -375,3 +375,111 @@ def cast_sqlserver_to_postgresql_type(sql_server_type: str) -> str:
     }
 
     return sql_server_to_pg.get(sql_server_type, "TEXT")
+
+
+def cast_db2_as400_to_typescript_types(db2_type: str) -> str:
+    """
+    Map a DB2 for i (AS/400) data type name to a TypeScript-friendly type.
+    The db2_type parameter is the DATA_TYPE value from QSYS2.SYSCOLUMNS.
+    Unknown types fall back to 'any'.
+    """
+    db2_to_ts: Dict[str, str] = {
+        # Character / string types
+        "CHAR": "string",
+        "CHARACTER": "string",
+        "VARCHAR": "string",
+        "CHARACTER VARYING": "string",
+        "CLOB": "string",
+        "GRAPHIC": "string",
+        "VARGRAPHIC": "string",
+        "DBCLOB": "string",
+        "NCHAR": "string",
+        "NVARCHAR": "string",
+        "NCLOB": "string",
+        "XML": "string",
+        "DATALINK": "string",
+        "ROWID": "string",
+
+        # Numeric types
+        "SMALLINT": "number",
+        "INTEGER": "number",
+        "INT": "number",
+        "BIGINT": "number",
+        "DECIMAL": "number",
+        "NUMERIC": "number",
+        "FLOAT": "number",
+        "REAL": "number",
+        "DOUBLE": "number",
+        "DOUBLE PRECISION": "number",
+        "DECFLOAT": "number",
+
+        # Date / time types
+        "DATE": "Date",
+        "TIME": "string",
+        "TIMESTAMP": "Datetime",
+
+        # Binary types
+        "BINARY": "string",
+        "VARBINARY": "string",
+        "CHAR FOR BIT DATA": "string",
+        "VARCHAR FOR BIT DATA": "string",
+        "BLOB": "string",
+
+        # Boolean (DB2 for i 7.5+)
+        "BOOLEAN": "boolean",
+    }
+    return db2_to_ts.get(db2_type.strip().upper(), "any")
+
+
+def cast_db2_as400_to_postgresql_type(db2_type: str) -> str:
+    """
+    Map a DB2 for i (AS/400) data type name to a PostgreSQL data type.
+    Used when replicating AS/400 table structures into PostgreSQL.
+    Unknown types fall back to 'TEXT'.
+    """
+    db2_to_pg: Dict[str, str] = {
+        # Character / string types
+        "CHAR": "CHAR",
+        "CHARACTER": "CHAR",
+        "VARCHAR": "VARCHAR",
+        "CHARACTER VARYING": "VARCHAR",
+        "CLOB": "TEXT",
+        "GRAPHIC": "CHAR",
+        "VARGRAPHIC": "VARCHAR",
+        "DBCLOB": "TEXT",
+        "NCHAR": "CHAR",
+        "NVARCHAR": "VARCHAR",
+        "NCLOB": "TEXT",
+        "XML": "XML",
+        "DATALINK": "TEXT",
+        "ROWID": "TEXT",
+
+        # Numeric types
+        "SMALLINT": "SMALLINT",
+        "INTEGER": "INTEGER",
+        "INT": "INTEGER",
+        "BIGINT": "BIGINT",
+        "DECIMAL": "NUMERIC",
+        "NUMERIC": "NUMERIC",
+        "FLOAT": "DOUBLE PRECISION",
+        "REAL": "REAL",
+        "DOUBLE": "DOUBLE PRECISION",
+        "DOUBLE PRECISION": "DOUBLE PRECISION",
+        "DECFLOAT": "NUMERIC",
+
+        # Date / time types
+        "DATE": "DATE",
+        "TIME": "TIME",
+        "TIMESTAMP": "TIMESTAMP",
+
+        # Binary types
+        "BINARY": "BYTEA",
+        "VARBINARY": "BYTEA",
+        "CHAR FOR BIT DATA": "BYTEA",
+        "VARCHAR FOR BIT DATA": "BYTEA",
+        "BLOB": "BYTEA",
+
+        # Boolean
+        "BOOLEAN": "BOOLEAN",
+    }
+    return db2_to_pg.get(db2_type.strip().upper(), "TEXT")

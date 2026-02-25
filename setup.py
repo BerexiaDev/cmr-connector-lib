@@ -11,6 +11,7 @@ setup(
         "sqlalchemy",
         "cx_oracle",
         "loguru",
+        "JayDeBeApi",
     ],
     description='CMR Connectors Library',
     author='Berexia DEV Team',
