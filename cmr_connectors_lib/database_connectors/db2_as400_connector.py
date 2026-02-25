@@ -75,7 +75,7 @@ class Db2As400Connector(SqlConnector):
         cursor = conn.cursor()
         try:
             cursor.execute(query)
-            column_names = [col[0] for col in cursor.description]
+            column_names = [str(col[0]) for col in cursor.description]
             rows = cursor.fetchall()
             return [
                 {col: safe_convert_to_string(row[i]) for i, col in enumerate(column_names)}
@@ -132,7 +132,7 @@ class Db2As400Connector(SqlConnector):
                 "ORDER BY TABLE_NAME",
                 (self.schema,)
             )
-            tables = [row[0].strip() for row in cursor.fetchall()]
+            tables = [str(row[0]).strip() for row in cursor.fetchall()]
             return tables
         except Exception as e:
             logger.error(f"Error getting tables: {e}")
@@ -155,8 +155,8 @@ class Db2As400Connector(SqlConnector):
             rows = cursor.fetchall()
             columns = [
                 {
-                    "name": row[0].strip(),
-                    "type": cast_db2_as400_to_typescript_types(row[1].strip()),
+                    "name": str(row[0]).strip(),
+                    "type": cast_db2_as400_to_typescript_types(str(row[1]).strip()),
                 }
                 for row in rows
             ]
@@ -219,7 +219,7 @@ class Db2As400Connector(SqlConnector):
             logger.debug(f"Found {len(table_rows)} tables")
 
             for table_row in table_rows:
-                tname = table_row[0].strip()
+                tname = str(table_row[0]).strip()
                 try:
                     cursor.execute(
                         "SELECT COLUMN_NAME, DATA_TYPE, LENGTH "
@@ -231,9 +231,9 @@ class Db2As400Connector(SqlConnector):
                     cols = cursor.fetchall()
                     column_list = [
                         {
-                            "name": c[0].strip(),
-                            "type": cast_db2_as400_to_typescript_types(c[1].strip()),
-                            "length": c[2],
+                            "name": str(c[0]).strip(),
+                            "type": cast_db2_as400_to_typescript_types(str(c[1]).strip()),
+                            "length": int(c[2]) if c[2] is not None else 0,
                         }
                         for c in cols
                     ]
@@ -319,15 +319,15 @@ class Db2As400Connector(SqlConnector):
 
             columns = [
                 {
-                    "position": row[0],
-                    "name": row[1].strip() if row[1] else row[1],
-                    "type": cast_db2_as400_to_postgresql_type(row[2].strip() if row[2] else ""),
-                    "length": row[3],
-                    "nullable": row[4].strip() if row[4] else "YES",
-                    "default": row[5],
-                    "primary_key": row[6].strip() if row[6] else "NO",
-                    "foreign_key": row[7].strip() if row[7] else "NO",
-                    "is_index": row[8].strip() if row[8] else "NO",
+                    "position": int(row[0]) if row[0] is not None else 0,
+                    "name": str(row[1]).strip() if row[1] else row[1],
+                    "type": cast_db2_as400_to_postgresql_type(str(row[2]).strip() if row[2] else ""),
+                    "length": int(row[3]) if row[3] is not None else 0,
+                    "nullable": str(row[4]).strip() if row[4] else "YES",
+                    "default": str(row[5]) if row[5] is not None else None,
+                    "primary_key": str(row[6]).strip() if row[6] else "NO",
+                    "foreign_key": str(row[7]).strip() if row[7] else "NO",
+                    "is_index": str(row[8]).strip() if row[8] else "NO",
                 }
                 for row in rows
             ]
@@ -375,9 +375,9 @@ class Db2As400Connector(SqlConnector):
             if not rows:
                 break
 
-            col_names = [desc[0] for desc in cursor.description]
+            col_names = [str(desc[0]) for desc in cursor.description]
             for row in rows:
-                yield dict(zip(col_names, row))
+                yield {k: safe_convert_to_string(v) for k, v in zip(col_names, row)}
 
             offset += batch_size
 
