@@ -128,7 +128,7 @@ class Db2As400Connector(SqlConnector):
         try:
             cursor.execute(
                 "SELECT TABLE_NAME FROM QSYS2.SYSTABLES "
-                "WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'T' "
+                "WHERE TABLE_SCHEMA = ? AND TABLE_TYPE IN ('T', 'P') "
                 "ORDER BY TABLE_NAME",
                 (self.schema,)
             )
@@ -211,7 +211,7 @@ class Db2As400Connector(SqlConnector):
 
             cursor.execute(
                 "SELECT TABLE_NAME FROM QSYS2.SYSTABLES "
-                "WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'T' "
+                "WHERE TABLE_SCHEMA = ? AND TABLE_TYPE IN ('T', 'P') "
                 "ORDER BY TABLE_NAME",
                 (self.schema,)
             )
