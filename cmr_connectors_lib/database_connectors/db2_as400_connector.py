@@ -263,58 +263,15 @@ class Db2As400Connector(SqlConnector):
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            schema_sql = """
-                SELECT
-                    c.ORDINAL_POSITION,
-                    c.COLUMN_NAME,
-                    c.DATA_TYPE,
-                    c.LENGTH,
-                    c.IS_NULLABLE,
-                    c.COLUMN_DEFAULT,
-                    CASE
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM QSYS2.SYSKEYCST kc
-                            JOIN QSYS2.SYSCST cst
-                                ON kc.CONSTRAINT_SCHEMA = cst.CONSTRAINT_SCHEMA
-                                AND kc.CONSTRAINT_NAME = cst.CONSTRAINT_NAME
-                            WHERE cst.CONSTRAINT_TYPE = 'PRIMARY KEY'
-                              AND cst.TABLE_SCHEMA = c.TABLE_SCHEMA
-                              AND cst.TABLE_NAME = c.TABLE_NAME
-                              AND kc.COLUMN_NAME = c.COLUMN_NAME
-                        ) THEN 'YES' ELSE 'NO'
-                    END AS IS_PRIMARY_KEY,
-                    CASE
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM QSYS2.SYSKEYCST kc
-                            JOIN QSYS2.SYSCST cst
-                                ON kc.CONSTRAINT_SCHEMA = cst.CONSTRAINT_SCHEMA
-                                AND kc.CONSTRAINT_NAME = cst.CONSTRAINT_NAME
-                            WHERE cst.CONSTRAINT_TYPE = 'FOREIGN KEY'
-                              AND cst.TABLE_SCHEMA = c.TABLE_SCHEMA
-                              AND cst.TABLE_NAME = c.TABLE_NAME
-                              AND kc.COLUMN_NAME = c.COLUMN_NAME
-                        ) THEN 'YES' ELSE 'NO'
-                    END AS IS_FOREIGN_KEY,
-                    CASE
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM QSYS2.SYSKEYS sk
-                            JOIN QSYS2.SYSINDEXES si
-                                ON sk.INDEX_SCHEMA = si.INDEX_SCHEMA
-                                AND sk.INDEX_NAME = si.INDEX_NAME
-                            WHERE si.TABLE_SCHEMA = c.TABLE_SCHEMA
-                              AND si.TABLE_NAME = c.TABLE_NAME
-                              AND sk.COLUMN_NAME = c.COLUMN_NAME
-                        ) THEN 'YES' ELSE 'NO'
-                    END AS IS_INDEX
-                FROM QSYS2.SYSCOLUMNS c
-                WHERE c.TABLE_SCHEMA = ?
-                  AND c.TABLE_NAME = ?
-                ORDER BY c.ORDINAL_POSITION
-            """
-            cursor.execute(schema_sql, (self.schema, table_name))
+            # 1. Get basic column info
+            cursor.execute(
+                "SELECT ORDINAL_POSITION, COLUMN_NAME, DATA_TYPE, LENGTH, "
+                "IS_NULLABLE, COLUMN_DEFAULT "
+                "FROM QSYS2.SYSCOLUMNS "
+                "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? "
+                "ORDER BY ORDINAL_POSITION",
+                (self.schema, table_name)
+            )
             rows = cursor.fetchall()
 
             columns = [
@@ -325,12 +282,71 @@ class Db2As400Connector(SqlConnector):
                     "length": int(row[3]) if row[3] is not None else 0,
                     "nullable": str(row[4]).strip() if row[4] else "YES",
                     "default": str(row[5]) if row[5] is not None else None,
-                    "primary_key": str(row[6]).strip() if row[6] else "NO",
-                    "foreign_key": str(row[7]).strip() if row[7] else "NO",
-                    "is_index": str(row[8]).strip() if row[8] else "NO",
+                    "primary_key": "NO",
+                    "foreign_key": "NO",
+                    "is_index": "NO",
                 }
                 for row in rows
             ]
+
+            col_lookup = {col["name"]: col for col in columns}
+
+            # 2. Get primary key columns
+            try:
+                cursor.execute(
+                    "SELECT kc.COLUMN_NAME "
+                    "FROM QSYS2.SYSKEYCST kc "
+                    "JOIN QSYS2.SYSCST cst "
+                    "  ON kc.CONSTRAINT_SCHEMA = cst.CONSTRAINT_SCHEMA "
+                    "  AND kc.CONSTRAINT_NAME = cst.CONSTRAINT_NAME "
+                    "WHERE cst.CONSTRAINT_TYPE = 'PRIMARY KEY' "
+                    "  AND cst.TABLE_SCHEMA = ? AND cst.TABLE_NAME = ?",
+                    (self.schema, table_name)
+                )
+                for row in cursor.fetchall():
+                    col_name = str(row[0]).strip()
+                    if col_name in col_lookup:
+                        col_lookup[col_name]["primary_key"] = "YES"
+            except Exception:
+                logger.debug(f"Could not fetch PK info for {table_name}")
+
+            # 3. Get foreign key columns
+            try:
+                cursor.execute(
+                    "SELECT kc.COLUMN_NAME "
+                    "FROM QSYS2.SYSKEYCST kc "
+                    "JOIN QSYS2.SYSCST cst "
+                    "  ON kc.CONSTRAINT_SCHEMA = cst.CONSTRAINT_SCHEMA "
+                    "  AND kc.CONSTRAINT_NAME = cst.CONSTRAINT_NAME "
+                    "WHERE cst.CONSTRAINT_TYPE = 'FOREIGN KEY' "
+                    "  AND cst.TABLE_SCHEMA = ? AND cst.TABLE_NAME = ?",
+                    (self.schema, table_name)
+                )
+                for row in cursor.fetchall():
+                    col_name = str(row[0]).strip()
+                    if col_name in col_lookup:
+                        col_lookup[col_name]["foreign_key"] = "YES"
+            except Exception:
+                logger.debug(f"Could not fetch FK info for {table_name}")
+
+            # 4. Get indexed columns
+            try:
+                cursor.execute(
+                    "SELECT sk.COLUMN_NAME "
+                    "FROM QSYS2.SYSKEYS sk "
+                    "JOIN QSYS2.SYSINDEXES si "
+                    "  ON sk.INDEX_SCHEMA = si.INDEX_SCHEMA "
+                    "  AND sk.INDEX_NAME = si.INDEX_NAME "
+                    "WHERE si.TABLE_SCHEMA = ? AND si.TABLE_NAME = ?",
+                    (self.schema, table_name)
+                )
+                for row in cursor.fetchall():
+                    col_name = str(row[0]).strip()
+                    if col_name in col_lookup:
+                        col_lookup[col_name]["is_index"] = "YES"
+            except Exception:
+                logger.debug(f"Could not fetch index info for {table_name}")
+
             return columns
 
         except Exception as e:
