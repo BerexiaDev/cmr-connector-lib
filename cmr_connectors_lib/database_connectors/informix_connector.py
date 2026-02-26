@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from datetime import datetime
-from typing import List, Dict
+from typing import Any, List, Dict
 import pyodbc
 from loguru import logger
 from pyodbc import Cursor
