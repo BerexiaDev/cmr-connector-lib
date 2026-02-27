@@ -408,16 +408,17 @@ class InformixConnector(SqlConnector):
 
             logger.info(f"[IFX][IDX] get_table_indexes raw_table_name={raw!r} lookup={lookup_no_quotes!r}")
 
-            # 1) Get tabid once (safer than repeating subqueries)
-            sql_tabid = "SELECT tabid FROM systables WHERE tabtype = 'T' AND tabname = ?"
-            params = (table_name,)
-
-            logger.info(f"[IFX][IDX] tabid_sql={sql_tabid} params={params}")
-            cursor.execute(sql_tabid, params)
-
+            # 1) Get tabid once
+            safe_name = table_name.replace("'", "''")
+            sql_tabid = (
+                "SELECT tabid FROM systables WHERE tabtype = 'T' AND tabname = '%s'"
+                % safe_name
+            )
+            logger.info(f"[IFX][IDX] tabid_sql={sql_tabid}")
+            cursor.execute(sql_tabid)
             row = cursor.fetchone()
             if not row:
-                logger.warning(f"[IFX][IDX] Table not found in Informix catalogs: {table_name!r}")
+                logger.warning(f"Table not found in Informix catalogs: {table_name}")
                 return []
             tabid = int(row[0])
             logger.info(f"[IFX][IDX] tabid={tabid} for table={table_name!r}")
