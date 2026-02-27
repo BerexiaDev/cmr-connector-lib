@@ -397,65 +397,64 @@ class InformixConnector(SqlConnector):
             conn.close()
 
     def get_table_indexes(self, table_name: str) -> List[Dict[str, Any]]:
-        """
-        Return index definitions for a table from Informix system catalogs.
-
-        Output example:
-        [
-          {"name": "idx_agent_sex_datnaiss", "unique": False, "primary": False, "columns": ["sexagent","datnaiss"]},
-          {"name": "agent_pk", "unique": True, "primary": True, "columns": ["numaffil"]}
-        ]
-        """
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            # 1) Get tabid once (safer than repeating subqueries)
-            cursor.execute(
-                "SELECT tabid FROM systables WHERE tabtype = 'T' AND tabname = ?",
-                (table_name,),
-            )
+            raw = (table_name or "")
+            lookup = raw.strip()
+            lookup_no_quotes = lookup.replace('"', '').replace("'", "").strip()
+            if "." in lookup_no_quotes:
+                lookup_no_quotes = lookup_no_quotes.split(".")[-1].strip()
+
+            logger.info(f"[IFX][IDX] get_table_indexes raw_table_name={raw!r} lookup={lookup_no_quotes!r}")
+
+            sql_tabid = """
+                SELECT tabid, tabname, owner
+                FROM systables
+                WHERE tabtype = 'T'
+                AND LOWER(tabname) = LOWER(?)
+            """
+            logger.info(f"[IFX][IDX] tabid_sql={sql_tabid.strip()} params={(lookup_no_quotes,)}")
+            cursor.execute(sql_tabid, (lookup_no_quotes,))
             row = cursor.fetchone()
             if not row:
-                logger.warning(f"Table not found in Informix catalogs: {table_name}")
+                logger.warning(f"[IFX][IDX] Table not found in systables for lookup={lookup_no_quotes!r}")
                 return []
             tabid = int(row[0])
+            logger.info(f"[IFX][IDX] matched systables tabid={tabid} tabname={row[1]!r} owner={row[2]!r}")
 
-            # 2) Fetch index rows for the table
-            # NOTE: sysindexes has part1..part16 as column numbers in order
-            cursor.execute(
-                """
+            sql_idx = """
                 SELECT
                     idxname, idxtype,
                     part1, part2, part3, part4, part5, part6, part7, part8,
                     part9, part10, part11, part12, part13, part14, part15, part16
                 FROM sysindexes
                 WHERE tabid = ?
-                """,
-                (tabid,),
-            )
+            """
+            logger.info(f"[IFX][IDX] sysindexes_sql params={(tabid,)}")
+            cursor.execute(sql_idx, (tabid,))
             index_rows = cursor.fetchall()
+            logger.info(f"[IFX][IDX] sysindexes rows for tabid={tabid}: {len(index_rows)}")
             if not index_rows:
                 return []
 
-            # 3) Map colno -> colname
-            cursor.execute(
-                "SELECT colno, colname FROM syscolumns WHERE tabid = ?",
-                (tabid,),
-            )
+            cursor.execute("SELECT colno, colname FROM syscolumns WHERE tabid = ?", (tabid,))
             col_map = {int(r[0]): r[1].strip() for r in cursor.fetchall()}
+            logger.info(f"[IFX][IDX] syscolumns mapped cols={len(col_map)}")
 
-            # 4) Find which idxnames are PK / UNIQUE constraints
             cursor.execute(
                 """
                 SELECT constrtype, idxname
                 FROM sysconstraints
                 WHERE tabid = ?
-                  AND constrtype IN ('P', 'U')
+                AND constrtype IN ('P', 'U')
                 """,
                 (tabid,),
             )
-            constraint_map: Dict[str, str] = {}  # idxname -> constrtype
-            for r in cursor.fetchall():
+            constraint_map: Dict[str, str] = {}
+            rows = cursor.fetchall()
+            logger.info(f"[IFX][IDX] sysconstraints P/U rows={len(rows)}")
+            for r in rows:
                 constrtype = r[0].strip() if r[0] else None
                 idxname = r[1].strip() if r[1] else None
                 if constrtype and idxname:
@@ -469,8 +468,7 @@ class InformixConnector(SqlConnector):
                 parts = [p for p in r[2:] if p is not None and int(p) > 0]
                 cols: List[str] = []
                 for colno in parts:
-                    colno_int = int(colno)
-                    colname = col_map.get(colno_int)
+                    colname = col_map.get(int(colno))
                     if colname:
                         cols.append(colname)
 
@@ -479,8 +477,6 @@ class InformixConnector(SqlConnector):
 
                 constrtype = constraint_map.get(idxname)
                 is_primary = constrtype == "P"
-                # Unique can come from constraint type 'U' or often from idxtype hints.
-                # We keep it conservative: PK/Unique constraints => unique.
                 is_unique = is_primary or (constrtype == "U")
 
                 results.append(
@@ -489,10 +485,11 @@ class InformixConnector(SqlConnector):
                         "unique": bool(is_unique),
                         "primary": bool(is_primary),
                         "columns": cols,
-                        "source_idxtype": idxtype,  # optional: useful for debugging
+                        "source_idxtype": idxtype,
                     }
                 )
 
+            logger.info(f"[IFX][IDX] returning {len(results)} index defs")
             return results
 
         except Exception as e:
