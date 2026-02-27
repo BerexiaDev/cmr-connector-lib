@@ -408,20 +408,19 @@ class InformixConnector(SqlConnector):
 
             logger.info(f"[IFX][IDX] get_table_indexes raw_table_name={raw!r} lookup={lookup_no_quotes!r}")
 
-            sql_tabid = """
-                SELECT tabid, tabname, owner
-                FROM systables
-                WHERE tabtype = 'T'
-                AND LOWER(tabname) = LOWER(?)
-            """
-            logger.info(f"[IFX][IDX] tabid_sql={sql_tabid.strip()} params={(lookup_no_quotes,)}")
-            cursor.execute(sql_tabid, (lookup_no_quotes,))
+            # 1) Get tabid once (safer than repeating subqueries)
+            sql_tabid = "SELECT tabid FROM systables WHERE tabtype = 'T' AND tabname = ?"
+            params = (table_name,)
+
+            logger.info(f"[IFX][IDX] tabid_sql={sql_tabid} params={params}")
+            cursor.execute(sql_tabid, params)
+
             row = cursor.fetchone()
             if not row:
-                logger.warning(f"[IFX][IDX] Table not found in systables for lookup={lookup_no_quotes!r}")
+                logger.warning(f"[IFX][IDX] Table not found in Informix catalogs: {table_name!r}")
                 return []
             tabid = int(row[0])
-            logger.info(f"[IFX][IDX] matched systables tabid={tabid} tabname={row[1]!r} owner={row[2]!r}")
+            logger.info(f"[IFX][IDX] tabid={tabid} for table={table_name!r}")
 
             sql_idx = """
                 SELECT
@@ -431,10 +430,10 @@ class InformixConnector(SqlConnector):
                 FROM sysindexes
                 WHERE tabid = ?
             """
-            logger.info(f"[IFX][IDX] sysindexes_sql params={(tabid,)}")
+            logger.info(f"[IFX][IDX] fetching sysindexes for tabid={tabid}")
             cursor.execute(sql_idx, (tabid,))
             index_rows = cursor.fetchall()
-            logger.info(f"[IFX][IDX] sysindexes rows for tabid={tabid}: {len(index_rows)}")
+            logger.info(f"[IFX][IDX] sysindexes rows={len(index_rows)} for tabid={tabid}")
             if not index_rows:
                 return []
 
