@@ -1,12 +1,16 @@
 from datetime import datetime
+import time
 from typing import Any, Dict, List, Tuple
 
 import pyodbc
 from loguru import logger
 
-from .sql_connector import SqlConnector
-from .sql_connector_utils import safe_convert_to_string, cast_sqlserver_to_typescript_types, \
-    cast_sqlserver_to_postgresql_type
+from .sql_connector import SqlConnector, is_retryable_connection_error
+from .sql_connector_utils import (
+    safe_convert_to_string,
+    cast_sqlserver_to_typescript_types,
+    cast_sqlserver_to_postgresql_type,
+)
 
 
 class SqlServerConnector(SqlConnector):
@@ -15,8 +19,7 @@ class SqlServerConnector(SqlConnector):
         super().__init__(host, user, password, port, database)
         self.driver = "ODBC Driver 17 for SQL Server"
 
-    def get_connection(self):
-        """Returns a pyodbc connection object directly."""
+    def _open_connection(self):
         conn_str = (
             f"DRIVER={{{self.driver}}};"
             f"SERVER={self.host},{self.port};"
@@ -27,21 +30,15 @@ class SqlServerConnector(SqlConnector):
         )
         return pyodbc.connect(conn_str, timeout=10)
 
+    def get_connection(self):
+        """Returns a pyodbc connection object directly."""
+        return self._connect_with_retry(
+            self._open_connection,
+            "connect",
+        )
+
     def ping(self):
-        """Returns True if the connection is successful, False otherwise."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT 1")
-            cursor.fetchone()  # Ensure the query runs
-            logger.info("Database connection is active.")
-            return True
-        except Exception as e:
-            logger.error(f"Database connection failed: {e}")
-            return False
-        finally:
-            cursor.close()
-            conn.close()
+        return super().ping()
 
     def extract_data_batch(self, table_name: str, offset: int = 0, limit: int = 100) -> List[dict]:
         query = (
@@ -52,31 +49,32 @@ class SqlServerConnector(SqlConnector):
             f"FETCH NEXT {limit} ROWS ONLY;"
         )
         logger.info(f"Fetching batch: table={table_name}, offset={offset}, limit={limit}")
-        conn = self.get_connection()
-        cur = conn.cursor()
         try:
-            cur.execute(query)
-            cols = [c[0] for c in cur.description]
-            return [
-                {col: safe_convert_to_string(row[idx]) for idx, col in enumerate(cols)}
-                for row in cur.fetchall()
-            ]
+            def _extract(_, cursor):
+                cursor.execute(query)
+                cols = [col[0] for col in cursor.description]
+                return [
+                    {col: safe_convert_to_string(row[idx]) for idx, col in enumerate(cols)}
+                    for row in cursor.fetchall()
+                ]
+
+            return self._run_operation_with_retry(f"extract_data_batch:{table_name}", _extract)
         except Exception as exc:
             logger.error(f"Error extracting batch from {table_name}: {exc}")
             return []
-        finally:
-            cur.close()
-            conn.close()
 
     def fetch_batch(self, cursor: pyodbc.Cursor, table_name: str, offset: int, limit: int = 100):
+        query = (
+            f"SELECT * FROM {table_name} "
+            f"ORDER BY (SELECT NULL) "
+            f"OFFSET {offset} ROWS FETCH NEXT {limit} ROWS ONLY;"
+        )
         try:
-            query = (
-                f"SELECT * FROM {table_name} "
-                f"ORDER BY (SELECT NULL) "
-                f"OFFSET {offset} ROWS FETCH NEXT {limit} ROWS ONLY;"
-            )
-            cursor.execute(query)
-            return cursor.fetchall()
+            def _fetch(_, active_cursor):
+                active_cursor.execute(query)
+                return active_cursor.fetchall()
+
+            return self._run_operation_with_retry(f"fetch_batch:{table_name}", _fetch)
         except Exception as exc:
             logger.error(f"Error fetching batch from {table_name}: {exc}")
             return []
@@ -86,100 +84,127 @@ class SqlServerConnector(SqlConnector):
         Full-sync streaming: sequentially fetch rows without OFFSET.
         Works best for reloads (truncate + reload). Not suitable for resume.
         """
-        try:
-            cursor.arraysize = batch_size
-            cursor.execute(f"SELECT * FROM {table_name};")
-    
-            while True:
-                rows = cursor.fetchmany(batch_size)
-                if not rows:
-                    break
-                yield rows
-    
-        except Exception as exc:
-            logger.error(f"Error streaming batch from {table_name}: {exc}")
-            return
+        active_connection = None
+        active_cursor = None
+        owns_retry_resources = False
+        rows_emitted = 0
+        retry_number = 0
+        query_started = False
 
+        try:
+            active_connection = self._open_connection()
+            active_cursor = active_connection.cursor()
+            owns_retry_resources = True
+
+            while True:
+                try:
+                    active_cursor.arraysize = batch_size
+                    if not query_started:
+                        active_cursor.execute(f"SELECT * FROM {table_name};")
+                        query_started = True
+
+                    rows = active_cursor.fetchmany(batch_size)
+                    if not rows:
+                        break
+
+                    rows_emitted += len(rows)
+                    yield rows
+                except Exception as exc:
+                    can_retry = (
+                        rows_emitted == 0
+                        and is_retryable_connection_error(exc)
+                        and retry_number < self.max_connection_retries
+                    )
+                    if not can_retry:
+                        logger.error(f"Error streaming batch from {table_name}: {exc}")
+                        return
+
+                    self._safe_cleanup(active_cursor, active_connection)
+                    retry_number += 1
+                    self._log_retry(f"stream_batch:{table_name}", retry_number, exc)
+                    time.sleep(self._retry_delay(retry_number))
+
+                    active_connection = self._open_connection()
+                    active_cursor = active_connection.cursor()
+                    query_started = False
+        finally:
+            if owns_retry_resources:
+                self._safe_cleanup(active_cursor, active_connection)
 
     def get_connection_tables(self):
-        conn = self.get_connection()
-        cursor = conn.cursor()
         sql = """
                 SELECT  t.name
                 FROM sys.tables t
                 WHERE t.is_ms_shipped = 0
             """
         try:
-            cursor.execute(sql)
-            tables = [row.name for row in cursor.fetchall()]
-            return tables
+            def _get_tables(_, cursor):
+                cursor.execute(sql)
+                return [row.name for row in cursor.fetchall()]
+
+            return self._run_operation_with_retry("get_connection_tables", _get_tables)
         except Exception as e:
             logger.error(f"Error getting tables: {e}")
             return []
-        finally:
-            cursor.close()
-            conn.close()
 
     def get_connection_columns(self, table_name):
-        conn = self.get_connection()
-        cursor = conn.cursor()
         try:
             sql = """
                     SELECT column_name, data_type
                     FROM INFORMATION_SCHEMA.COLUMNS
                     WHERE table_name   = ?;
               """
-            cursor.execute(sql, table_name)
-            rows = cursor.fetchall()
 
-            columns = [{'name': row.column_name, 'type': cast_sqlserver_to_typescript_types(row.data_type)} for row in
-                       rows]
-            return columns
+            def _get_columns(_, cursor):
+                cursor.execute(sql, table_name)
+                rows = cursor.fetchall()
+                return [
+                    {
+                        "name": row.column_name,
+                        "type": cast_sqlserver_to_typescript_types(row.data_type),
+                    }
+                    for row in rows
+                ]
+
+            return self._run_operation_with_retry(f"get_connection_columns:{table_name}", _get_columns)
         except Exception as e:
             logger.error(f"Error getting columns: {e}")
             return []
-        finally:
-            cursor.close()
-            conn.close()
 
     def count_table_rows(self, table_name: str) -> int:
-        connection = self.get_connection()
-        cursor = connection.cursor()
         try:
-            count_result = cursor.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
-            total_count = int(count_result[0]) if count_result else 0
-            return total_count
+            def _count(_, cursor):
+                count_result = cursor.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+                return int(count_result[0]) if count_result else 0
+
+            return self._run_operation_with_retry(f"count_table_rows:{table_name}", _count)
         except Exception as e:
             logger.error(f"Error getting table total rows: {str(e)}")
             return 0
-        finally:
-            cursor.close()
-            connection.close()
 
     def get_min_max_date(self, table_name: str, column_name: str):
         """
         Returns (min_value, max_value) for a DATE/DATETIME column in SQL Server.
         """
-        conn = self.get_connection()
-        cur = conn.cursor()
+        sql = f"""
+            SELECT
+                MIN([{column_name}]) AS min_val,
+                MAX([{column_name}]) AS max_val
+            FROM [{table_name}]
+            WHERE [{column_name}] IS NOT NULL;
+        """
         try:
-            sql = f"""
-                SELECT
-                    MIN([{column_name}]) AS min_val,
-                    MAX([{column_name}]) AS max_val
-                FROM [{table_name}]
-                WHERE [{column_name}] IS NOT NULL;
-            """
-            cur.execute(sql)
-            row = cur.fetchone()
-            return (row[0], row[1]) if row else (None, None)
-        finally:
-            cur.close()
-            conn.close()
+            def _get_min_max(_, cursor):
+                cursor.execute(sql)
+                row = cursor.fetchone()
+                return (row[0], row[1]) if row else (None, None)
+
+            return self._run_operation_with_retry(f"get_min_max_date:{table_name}", _get_min_max)
+        except Exception as e:
+            logger.error(f"Error getting min/max for {table_name}.{column_name}: {e}")
+            return (None, None)
 
     def extract_table_schema(self, table_name):
-        conn = self.get_connection()
-        cursor = conn.cursor()
         try:
             schema_sql = """
                     WITH pk_cols AS (
@@ -220,59 +245,49 @@ class SqlServerConnector(SqlConnector):
                     ORDER BY col.column_id;
                 """
 
-            rows = cursor.execute(schema_sql, table_name, table_name, table_name, table_name).fetchall()
-            result = []
-            seen = set()
-            for row in rows:
-                sql_type = row.data_type.upper()
+            def _extract_schema(_, cursor):
+                rows = cursor.execute(schema_sql, table_name, table_name, table_name, table_name).fetchall()
+                result = []
+                seen = set()
+                for row in rows:
+                    sql_type = row.data_type.upper()
 
-                # Handle any LOB/“MAX” types where max_length = -1
-                if row.max_length == -1:
-
-                    if sql_type in ("VARCHAR", "CHAR", "NVARCHAR", "NCHAR", "TEXT", "NTEXT"):
-                        pg_type = "TEXT"
-
-                    elif sql_type in ("VARBINARY", "IMAGE"):
-                        pg_type = "BYTEA"
-
-                    elif sql_type == "XML":
-                        pg_type = "XML"
-
+                    if row.max_length == -1:
+                        if sql_type in ("VARCHAR", "CHAR", "NVARCHAR", "NCHAR", "TEXT", "NTEXT"):
+                            pg_type = "TEXT"
+                        elif sql_type in ("VARBINARY", "IMAGE"):
+                            pg_type = "BYTEA"
+                        elif sql_type == "XML":
+                            pg_type = "XML"
+                        else:
+                            pg_type = "TEXT"
                     else:
-                        pg_type = "TEXT"
+                        pg_type = cast_sqlserver_to_postgresql_type(row.data_type)
 
-                # Otherwise, handle fixed-length or length‐bounded
-                else:
-                    pg_type = cast_sqlserver_to_postgresql_type(row.data_type)
+                    key = row.name.lower()
+                    if key in seen:
+                        logger.warning(f"Duplicate column '{row.name}' in table {table_name}, skipping")
+                        continue
 
-                # Unique key for dedupe (column name case-insensitive)
-                key = row.name.lower()
-                if key in seen:
-                    logger.warning(f"Duplicate column '{row.name}' in table {table_name}, skipping")
-                    continue
+                    seen.add(key)
+                    result.append({
+                        "position": row.column_id,
+                        "name": row.name,
+                        "type": pg_type,
+                        "length": row.max_length,
+                        "nullable": row.is_nullable,
+                        "default": row.default_value,
+                        "primary_key": row.is_primary_key,
+                        "foreign_key": row.is_foreign_key,
+                        "is_index": row.is_indexed,
+                    })
 
-                seen.add(key)
+                return result
 
-                result.append({
-                    "position": row.column_id,
-                    "name": row.name,
-                    "type": pg_type,
-                    "length": row.max_length,
-                    "nullable": row.is_nullable,
-                    "default": row.default_value,
-                    "primary_key": row.is_primary_key,
-                    "foreign_key": row.is_foreign_key,
-                    "is_index": row.is_indexed,
-                })
-
-            return result
-
+            return self._run_operation_with_retry(f"extract_table_schema:{table_name}", _extract_schema)
         except Exception as exc:
             logger.error(f"Error extracting schema for {table_name}: {exc}")
             return []
-        finally:
-            cursor.close()
-            conn.close()
 
     def fetch_deltas(
         self,
@@ -282,11 +297,10 @@ class SqlServerConnector(SqlConnector):
         since_ts: datetime,
         batch_size: int = 10_000,
     ):
-        # Build composite expressions
-        pk_cols = ", ".join(primary_keys)                          # ex: "siren, code"
-        partition_expr = pk_cols                                   # PARTITION BY siren, code
-        order_expr = "Date_operation DESC"                         # always the same
-        order_by_final = ", ".join(primary_keys)                   # ORDER BY siren, code
+        pk_cols = ", ".join(primary_keys)
+        partition_expr = pk_cols
+        order_expr = "Date_operation DESC"
+        order_by_final = ", ".join(primary_keys)
 
         sql = f"""
             SELECT *
@@ -306,17 +320,42 @@ class SqlServerConnector(SqlConnector):
         """
 
         offset = 0
-        while True:
-            cursor.execute(sql, (since_ts, offset, batch_size))
-            rows = cursor.fetchall()
-            if not rows:
-                break
+        active_connection = None
+        active_cursor = None
+        owns_retry_resources = False
+        retry_number = 0
 
-            col_names = [col[0] for col in cursor.description]
-            for row in rows:
-                yield dict(zip(col_names, row))
+        try:
+            active_connection = self._open_connection()
+            active_cursor = active_connection.cursor()
+            owns_retry_resources = True
 
-            offset += batch_size
+            while True:
+                try:
+                    active_cursor.execute(sql, (since_ts, offset, batch_size))
+                    rows = active_cursor.fetchall()
+                    if not rows:
+                        break
+
+                    col_names = [col[0] for col in active_cursor.description]
+                    for row in rows:
+                        yield dict(zip(col_names, row))
+
+                    offset += batch_size
+                except Exception as exc:
+                    if not is_retryable_connection_error(exc) or retry_number >= self.max_connection_retries:
+                        raise
+
+                    self._safe_cleanup(active_cursor, active_connection)
+                    retry_number += 1
+                    self._log_retry(f"fetch_deltas:{log_table}", retry_number, exc)
+                    time.sleep(self._retry_delay(retry_number))
+
+                    active_connection = self._open_connection()
+                    active_cursor = active_connection.cursor()
+        finally:
+            if owns_retry_resources:
+                self._safe_cleanup(active_cursor, active_connection)
 
     def get_table_indexes(self, table_name: str) -> List[Dict[str, Any]]:
         """
@@ -335,20 +374,15 @@ class SqlServerConnector(SqlConnector):
 
         def _split_schema_table(t: str) -> Tuple[str, str]:
             t = (t or "").strip()
-            # allow [dbo].[agent] style too
             t = t.replace("[", "").replace("]", "")
             if "." in t:
-                s, tb = t.split(".", 1)
-                return s.strip(), tb.strip()
+                schema_name, pure_table = t.split(".", 1)
+                return schema_name.strip(), pure_table.strip()
             return "dbo", t.strip()
 
         schema_name, pure_table = _split_schema_table(table_name)
 
-        conn = self.get_connection()
-        cur = conn.cursor()
         try:
-            # Only key columns (exclude included columns); ordered by key_ordinal.
-            # Filter out hypothetical/system indexes; keep clustered/nonclustered only.
             sql = """
             SELECT
             i.name AS index_name,
@@ -376,33 +410,35 @@ class SqlServerConnector(SqlConnector):
             ORDER BY i.is_primary_key DESC, i.is_unique DESC, i.name;
             """
 
-            cur.execute(sql, (schema_name, pure_table))
-            rows = cur.fetchall()
+            def _get_indexes(_, cursor):
+                cursor.execute(sql, (schema_name, pure_table))
+                rows = cursor.fetchall()
 
-            results: List[Dict[str, Any]] = []
-            for r in rows:
-                idxname = r[0]
-                is_unique = bool(r[1])
-                is_primary = bool(r[2])
-                cols_csv = r[3] or ""
-                cols = [c.strip() for c in cols_csv.split(",") if c.strip()]
-                if not cols:
-                    continue
+                results: List[Dict[str, Any]] = []
+                for row in rows:
+                    idxname = row[0]
+                    is_unique = bool(row[1])
+                    is_primary = bool(row[2])
+                    cols_csv = row[3] or ""
+                    cols = [col.strip() for col in cols_csv.split(",") if col.strip()]
+                    if not cols:
+                        continue
 
-                results.append(
-                    {
-                        "name": idxname,
-                        "unique": bool(is_unique or is_primary),  # PK implies unique
-                        "primary": bool(is_primary),
-                        "columns": cols,
-                    }
-                )
+                    results.append(
+                        {
+                            "name": idxname,
+                            "unique": bool(is_unique or is_primary),
+                            "primary": bool(is_primary),
+                            "columns": cols,
+                        }
+                    )
 
-            return results
+                return results
 
+            return self._run_operation_with_retry(
+                f"get_table_indexes:{schema_name}.{pure_table}",
+                _get_indexes,
+            )
         except Exception as e:
             logger.error(f"Error getting indexes for SQL Server table {schema_name}.{pure_table}: {e}")
             return []
-        finally:
-            cur.close()
-            conn.close()
