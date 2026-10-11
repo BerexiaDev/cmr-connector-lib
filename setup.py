@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='cmr_connectors_lib',
-    version='0.10.0',
+    version='1.0.14',
     packages=find_packages(),
     # Add dependencies here
     install_requires=[
