@@ -83,12 +83,15 @@ class InformixConnector(SqlConnector):
             logger.error(f"Error fetching batch from {table_name}: {str(e)}")
             return []
 
-    def stream_batch(self, cursor: pyodbc.Cursor, table_name: str, batch_size: int = 10_000):
+    def stream_batch(
+        self, cursor: pyodbc.Cursor, table_name: str, batch_size: int = 10_000,
+        *, query: str = None, params=(),
+    ):
         """
-        Full-sync streaming for Informix (no SKIP / OFFSET).
-        Uses a single SELECT and fetchmany to avoid performance degradation.
-        Suitable for truncate + reload scenarios.
+        Stream a full table or a parameterized query through one owned cursor.
+        Retry only before yielding rows; propagate failures to the sync caller.
         """
+        query = query if query is not None else f"SELECT * FROM {table_name}"
         active_connection = None
         active_cursor = None
         owns_retry_resources = False
@@ -99,14 +102,14 @@ class InformixConnector(SqlConnector):
         try:
             logger.info(f"Start streaming Informix table {table_name} with batch_size={batch_size}")
             active_connection = self._open_connection()
-            active_cursor = active_connection.cursor()
             owns_retry_resources = True
+            active_cursor = active_connection.cursor()
 
             while True:
                 try:
                     active_cursor.arraysize = batch_size
                     if not query_started:
-                        active_cursor.execute(f"SELECT * FROM {table_name}")
+                        active_cursor.execute(query, params)
                         query_started = True
 
                     rows = active_cursor.fetchmany(batch_size)
@@ -123,7 +126,7 @@ class InformixConnector(SqlConnector):
                     )
                     if not can_retry:
                         logger.error(f"Error streaming batch from Informix table {table_name}: {exc}")
-                        return
+                        raise
 
                     self._safe_cleanup(active_cursor, active_connection)
                     retry_number += 1
