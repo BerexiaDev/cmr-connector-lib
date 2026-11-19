@@ -1,3 +1,4 @@
+import re
 from typing import Dict
 
 import sqlalchemy
@@ -375,3 +376,170 @@ def cast_sqlserver_to_postgresql_type(sql_server_type: str) -> str:
     }
 
     return sql_server_to_pg.get(sql_server_type, "TEXT")
+
+
+def _normalize_oracle_type(oracle_type: str) -> str:
+    """Lowercase, collapse whitespace and drop precision/scale modifiers.
+
+    ``TIMESTAMP(6) WITH TIME ZONE`` -> ``timestamp with time zone``,
+    ``INTERVAL DAY(2) TO SECOND(6)`` -> ``interval day to second``.
+    """
+    normalized = re.sub(r"\(\s*\d+(?:\s*,\s*\d+)?\s*(?:byte|char)?\s*\)", "", (oracle_type or "").lower())
+    return " ".join(normalized.split())
+
+
+def cast_oracle_to_typescript(oracle_type: str) -> str:
+    """Maps an Oracle data type (as listed in ALL_TAB_COLUMNS) to a TypeScript type."""
+    if not oracle_type:
+        return "any"
+
+    oracle_to_ts: Dict[str, str] = {
+        # Numbers
+        "number": "number",
+        "numeric": "number",
+        "dec": "number",
+        "decimal": "number",
+        "int": "number",
+        "integer": "number",
+        "smallint": "number",
+        "float": "number",
+        "real": "number",
+        "double precision": "number",
+        "binary_float": "number",
+        "binary_double": "number",
+
+        # Strings & characters
+        "char": "string",
+        "character": "string",
+        "nchar": "string",
+        "national char": "string",
+        "national character": "string",
+        "varchar": "string",
+        "varchar2": "string",
+        "nvarchar2": "string",
+        "character varying": "string",
+        "char varying": "string",
+        "national character varying": "string",
+        "national char varying": "string",
+        "clob": "string",
+        "nclob": "string",
+        "long": "string",
+        "rowid": "string",
+        "urowid": "string",
+        "xmltype": "string",
+        "bfile": "string",
+        "sdo_geometry": "string",
+        "uritype": "string",
+        "httpuritype": "string",
+        "xdburitype": "string",
+        "dburitype": "string",
+        "ref": "string",
+        "interval year to month": "string",
+        "interval day to second": "string",
+
+        # Dates & times
+        "date": "Date",
+        "timestamp": "Datetime",
+        "timestamp with time zone": "Datetime",
+        "timestamp with local time zone": "Datetime",
+
+        # Booleans
+        "boolean": "boolean",
+        "bool": "boolean",
+
+        # Binaries, objects & unknowns
+        "json": "any",
+        "object": "any",
+        "vector": "any",
+        "varray": "any",
+        "nested table": "any",
+        "raw": "any",
+        "long raw": "any",
+        "blob": "any",
+        "anydata": "any",
+        "anytype": "any",
+        "anydataset": "any",
+    }
+
+    return oracle_to_ts.get(_normalize_oracle_type(oracle_type), "any")
+
+
+def cast_oracle_to_postgresql_type(oracle_type: str) -> str:
+    """
+    Map an Oracle type to a PostgreSQL type.
+
+    Oracle DATE carries a time part, so it maps to TIMESTAMP. Oracle TIMESTAMP
+    precision 0..9 maps to TIMESTAMP/TIMESTAMPTZ (PostgreSQL keeps microseconds).
+    """
+    oracle_to_pg: Dict[str, str] = {
+        "number": "NUMERIC",
+        "numeric": "NUMERIC",
+        "dec": "NUMERIC",
+        "decimal": "NUMERIC",
+
+        "int": "INTEGER",
+        "integer": "INTEGER",
+        "smallint": "SMALLINT",
+
+        "float": "DOUBLE PRECISION",
+        "real": "REAL",
+        "double precision": "DOUBLE PRECISION",
+        "binary_float": "REAL",
+        "binary_double": "DOUBLE PRECISION",
+
+        "char": "CHAR",
+        "character": "CHAR",
+        "nchar": "CHAR",
+        "national char": "CHAR",
+        "national character": "CHAR",
+
+        "varchar": "VARCHAR",
+        "varchar2": "VARCHAR",
+        "nvarchar2": "VARCHAR",
+        "character varying": "VARCHAR",
+        "char varying": "VARCHAR",
+        "national character varying": "VARCHAR",
+        "national char varying": "VARCHAR",
+
+        "clob": "TEXT",
+        "nclob": "TEXT",
+        "long": "TEXT",
+
+        "raw": "BYTEA",
+        "long raw": "BYTEA",
+        "blob": "BYTEA",
+        "bfile": "TEXT",
+
+        "date": "TIMESTAMP",
+        "timestamp": "TIMESTAMP",
+        "timestamp with time zone": "TIMESTAMPTZ",
+        "timestamp with local time zone": "TIMESTAMPTZ",
+
+        "interval year to month": "INTERVAL",
+        "interval day to second": "INTERVAL",
+
+        "rowid": "TEXT",
+        "urowid": "TEXT",
+        "xmltype": "XML",
+        "json": "JSONB",
+        "boolean": "BOOLEAN",
+        "bool": "BOOLEAN",
+
+        "ref": "TEXT",
+        "object": "JSONB",
+        "varray": "JSONB",
+        "nested table": "JSONB",
+        "vector": "TEXT",
+
+        "sdo_geometry": "TEXT",
+        "uritype": "TEXT",
+        "httpuritype": "TEXT",
+        "xdburitype": "TEXT",
+        "dburitype": "TEXT",
+
+        "anydata": "JSONB",
+        "anytype": "JSONB",
+        "anydataset": "JSONB",
+    }
+
+    return oracle_to_pg.get(_normalize_oracle_type(oracle_type), "TEXT")

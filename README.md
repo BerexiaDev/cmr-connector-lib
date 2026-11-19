@@ -6,7 +6,7 @@ A unified Python database abstraction layer that provides a consistent interface
 
 ## What This Library Does
 
-CMR Connectors Library sits between your application and your databases, offering a single API to interact with **PostgreSQL**, **SQL Server**, and **IBM Informix**. Instead of writing database-specific logic for each system, you use one factory to create connectors and one set of methods to work with any supported database.
+CMR Connectors Library sits between your application and your databases, offering a single API to interact with **PostgreSQL**, **SQL Server**, **IBM Informix**, and **Oracle**. Instead of writing database-specific logic for each system, you use one factory to create connectors and one set of methods to work with any supported database.
 
 The library is designed around these core goals:
 
@@ -22,7 +22,7 @@ The library is designed around these core goals:
 
 ### Factory Pattern
 
-The library uses a factory to instantiate the right connector based on the database type. You pass a type identifier (`postgres`, `sqlserver`, or `informix`) along with connection settings, and the factory returns a ready-to-use connector.
+The library uses a factory to instantiate the right connector based on the database type. You pass a type identifier (`postgres`, `sqlserver`, `informix`, or `oracle`) along with connection settings, and the factory returns a ready-to-use connector.
 
 ### Abstract Base Class
 
@@ -63,6 +63,16 @@ Each connector handles the dialect differences internally — pagination syntax,
 - **Encoding:** Handles Latin-1 (ISO-8859-1) for SQL_CHAR and UTF-8 for SQL_WCHAR
 - **Type Mapping:** Translates Informix integer-based column type codes to both TypeScript and PostgreSQL types
 
+### Oracle
+
+- **Driver:** python-oracledb in thin mode (no Oracle Instant Client required)
+- **Connection:** DSN built as `host:port/service`, where `database` is the service name
+- **Schema-aware:** `schema` (owner) defaults to the login user; when it differs, the session `CURRENT_SCHEMA` is set to it
+- **Identifiers:** Table and schema names are normalised to uppercase (unquoted Oracle identifiers), so lowercase reference names resolve
+- **Pagination:** `OFFSET...FETCH NEXT` syntax (Oracle 12c+)
+- **Streaming:** Cursor-based batch streaming for large tables
+- **Type Mapping:** Maps Oracle types (including `TIMESTAMP(n) WITH [LOCAL] TIME ZONE`, `INTERVAL`, LOBs) to TypeScript and PostgreSQL; only literal column defaults are carried over
+
 ---
 
 ## Core Capabilities
@@ -82,6 +92,7 @@ Each connector handles the dialect differences internally — pagination syntax,
 - **Cross-Database Type Mapping** — Convert native types between database systems:
   - SQL Server to PostgreSQL
   - Informix to PostgreSQL
+  - Oracle to PostgreSQL
   - Any SQL type to TypeScript (for API/frontend integration)
 - **Data-Driven Type Detection** — Infer appropriate PostgreSQL types from pandas Series data samples
 
@@ -110,16 +121,16 @@ The PostgreSQL connector includes an advanced query builder that constructs SQL 
 
 Each connector requires a settings dictionary with connection parameters:
 
-| Parameter    | PostgreSQL | SQL Server | Informix | Description                        |
-|-------------|:----------:|:----------:|:--------:|-------------------------------------|
-| `host`      | Required   | Required   | Required | Database server hostname or IP      |
-| `user`      | Required   | Required   | Required | Authentication username             |
-| `password`  | Required   | Required   | Required | Authentication password             |
-| `port`      | Required   | Required   | Required | Database server port                |
-| `database`  | Required   | Required   | Required | Target database name                |
-| `schema`    | Optional   | -          | -        | PostgreSQL schema (search_path)     |
-| `protocol`  | -          | -          | Required | Informix connection protocol        |
-| `locale`    | -          | -          | Optional | Informix client locale setting      |
+| Parameter    | PostgreSQL | SQL Server | Informix | Oracle   | Description                        |
+|-------------|:----------:|:----------:|:--------:|:--------:|-------------------------------------|
+| `host`      | Required   | Required   | Required | Required | Database server hostname or IP      |
+| `user`      | Required   | Required   | Required | Required | Authentication username             |
+| `password`  | Required   | Required   | Required | Required | Authentication password             |
+| `port`      | Required   | Required   | Required | Required | Database server port                |
+| `database`  | Required   | Required   | Required | Required | Target database name (Oracle: service name) |
+| `schema`    | Optional   | -          | -        | Optional | PostgreSQL search_path / Oracle owner (defaults to `user`) |
+| `protocol`  | -          | -          | Required | -        | Informix connection protocol        |
+| `locale`    | -          | -          | Optional | -        | Informix client locale setting      |
 
 ---
 
@@ -133,6 +144,7 @@ cmr_connectors_lib/
         postgres_connector.py          # PostgreSQL implementation
         sql_server_connector.py        # SQL Server implementation
         informix_connector.py          # IBM Informix implementation
+        oracle_connector.py            # Oracle implementation
         sql_connector_utils.py         # Type mapping and conversion utilities
         utils/
             enums.py                   # Query building enumerations
@@ -148,7 +160,7 @@ cmr_connectors_lib/
 | `pyodbc`    | SQL Server and Informix database connections  |
 | `psycopg2`  | PostgreSQL database connections               |
 | `sqlalchemy` | SQL type mapping and handling                |
-| `cx_oracle`  | Oracle database connections (reserved)       |
+| `oracledb`   | Oracle database connections (thin mode)       |
 | `loguru`     | Structured logging                           |
 
 ---

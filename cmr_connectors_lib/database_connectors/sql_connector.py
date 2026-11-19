@@ -23,6 +23,22 @@ RETRYABLE_CONNECTION_ERROR_MARKERS = (
     "08s01",
     "08001",
     "datadirect",
+    # Oracle (python-oracledb) transport errors
+    "ora-03113",
+    "ora-03114",
+    "ora-03135",
+    "ora-12170",
+    "ora-12535",
+    "ora-12537",
+    "ora-12541",
+    "ora-12543",
+    "ora-12547",
+    "ora-12570",
+    "ora-12571",
+    "dpy-1001",
+    "dpy-4011",
+    "dpi-1010",
+    "dpi-1080",
 )
 
 NON_RETRYABLE_CONNECTION_ERROR_MARKERS = (
