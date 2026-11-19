@@ -2,14 +2,14 @@ from setuptools import setup, find_packages
 
 setup(
     name='cmr_connectors_lib',
-    version='1.0.14',
+    version='1.0.15',
     packages=find_packages(),
     # Add dependencies here
     install_requires=[
         "pyodbc",
         "psycopg2",
         "sqlalchemy",
-        "cx_oracle",
+        "oracledb>=2.0,<5",
         "loguru",
     ],
     description='CMR Connectors Library',
