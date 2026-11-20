@@ -4,6 +4,7 @@
 from abc import abstractmethod
 from datetime import datetime
 import time
+import traceback
 from typing import Iterator, Dict, Any, Callable
 
 import pyodbc
@@ -18,6 +19,7 @@ RETRYABLE_CONNECTION_ERROR_MARKERS = (
     "connection reset",
     "connection closed",
     "connection refused",
+    "[winerror 10061]",
     "socket",
     "timeout",
     "08s01",
@@ -122,9 +124,24 @@ class SqlConnector():
         return retry_number * self.retry_backoff_seconds
 
     def _log_retry(self, operation_name: str, retry_number: int, error: Exception):
+        details = str(error)
+        if isinstance(self.password, str) and self.password:
+            details = details.replace(self.password, "[REDACTED]")
         logger.warning(
-            f"{self._connector_name()} retry {retry_number}/{self.max_connection_retries} "
-            f"for {operation_name}: {error}"
+            "{} retry {}/{} for {} | host={!r} port={} database={!r} user={!r} schema={!r} | error={}",
+            self._connector_name(), retry_number, self.max_connection_retries, operation_name,
+            self.host, self.port, self.database, self.user, getattr(self, "schema", None), details,
+        )
+
+    def _log_failure(self, operation_name: str, error: Exception):
+        # Preserve the traceback without Loguru's local-variable dumps (credentials).
+        details = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+        if isinstance(self.password, str) and self.password:
+            details = details.replace(self.password, "[REDACTED]")
+        logger.error(
+            "{} {} failed | host={!r} port={} database={!r} user={!r} schema={!r} | traceback:\n{}",
+            self._connector_name(), operation_name, self.host, self.port, self.database,
+            self.user, getattr(self, "schema", None), details,
         )
 
     @staticmethod
@@ -224,7 +241,7 @@ class SqlConnector():
 
             self._run_operation_with_retry("ping", _ping)
         except Exception as e:
-            logger.error(f"Database connection failed: {e}")
+            self._log_failure("ping", e)
             return False
 
         logger.info("Database connection is active.")

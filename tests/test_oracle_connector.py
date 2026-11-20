@@ -184,6 +184,13 @@ class RetryClassificationTests(unittest.TestCase):
         self.assertTrue(is_retryable_connection_error(Exception("ORA-03113: end-of-file on communication channel")))
         self.assertTrue(is_retryable_connection_error(Exception("DPY-4011: the database or network closed the connection")))
 
+    def test_oracle_windows_connection_refused_is_retryable(self):
+        error = Exception(
+            "DPY-6005: cannot connect to database.\n"
+            "[WinError 10061] No connection could be made because the target machine actively refused it"
+        )
+        self.assertTrue(is_retryable_connection_error(error))
+
     def test_oracle_sql_errors_are_not_retryable(self):
         self.assertFalse(is_retryable_connection_error(Exception("ORA-00942: table or view does not exist")))
         self.assertFalse(is_retryable_connection_error(Exception("ORA-01017: invalid username/password")))
