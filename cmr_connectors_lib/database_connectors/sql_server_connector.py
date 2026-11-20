@@ -137,15 +137,11 @@ class SqlServerConnector(SqlConnector):
                 FROM sys.tables t
                 WHERE t.is_ms_shipped = 0
             """
-        try:
-            def _get_tables(_, cursor):
-                cursor.execute(sql)
-                return [row.name for row in cursor.fetchall()]
+        def _get_tables(_, cursor):
+            cursor.execute(sql)
+            return [row.name for row in cursor.fetchall()]
 
-            return self._run_operation_with_retry("get_connection_tables", _get_tables)
-        except Exception as e:
-            logger.error(f"Error getting tables: {e}")
-            return []
+        return self._run_operation_with_retry("get_connection_tables", _get_tables)
 
     def get_connection_columns(self, table_name):
         try:

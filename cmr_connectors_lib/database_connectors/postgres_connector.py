@@ -211,8 +211,9 @@ class PostgresConnector(SqlConnector):
 
     def get_connection_tables(self):
         conn = self.get_connection()
-        cur = conn.cursor()
+        cur = None
         try:
+            cur = conn.cursor()
             cur.execute(
                 """
                 SELECT table_name
@@ -223,12 +224,8 @@ class PostgresConnector(SqlConnector):
                 (self.schema,),
             )
             return [row[0] for row in cur.fetchall()]
-        except Exception as e:
-            logger.error(f"Error getting tables: {e}")
-            return []
         finally:
-            cur.close()
-            conn.close()
+            self._safe_cleanup(cur, conn)
 
     def get_connection_columns(self, table_name: str):
         conn = self.get_connection()

@@ -74,7 +74,7 @@ class OracleConnector(SqlConnector):
         try:
             found = self._run_operation_with_retry("ping", _ping)
         except Exception as e:
-            logger.error(f"Oracle connection failed: {e}")
+            self._log_failure("ping", e)
             return False
 
         if not found:
@@ -127,15 +127,11 @@ class OracleConnector(SqlConnector):
             WHERE owner = :1
             ORDER BY table_name
         """
-        try:
-            def _get_tables(_, cursor):
-                cursor.execute(sql, [self.schema])
-                return [row[0] for row in cursor.fetchall()]
+        def _get_tables(_, cursor):
+            cursor.execute(sql, [self.schema])
+            return [row[0] for row in cursor.fetchall()]
 
-            return self._run_operation_with_retry("get_connection_tables", _get_tables)
-        except Exception as e:
-            logger.error(f"Error getting tables: {e}")
-            return []
+        return self._run_operation_with_retry("get_connection_tables", _get_tables)
 
     def get_connection_columns(self, table_name):
         owner, pure_table = self._split_table(table_name)

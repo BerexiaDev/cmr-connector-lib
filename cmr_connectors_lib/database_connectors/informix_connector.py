@@ -144,15 +144,11 @@ class InformixConnector(SqlConnector):
 
     def get_connection_tables(self):
         sql = "SELECT tabname FROM systables WHERE tabtype = 'T' AND tabname NOT LIKE 'sys%'"
-        try:
-            def _get_tables(_, cursor):
-                cursor.execute(sql)
-                return [row.tabname for row in cursor.fetchall()]
+        def _get_tables(_, cursor):
+            cursor.execute(sql)
+            return [row.tabname for row in cursor.fetchall()]
 
-            return self._run_operation_with_retry("get_connection_tables", _get_tables)
-        except Exception as e:
-            logger.error(f"Error getting tables: {e}")
-            return []
+        return self._run_operation_with_retry("get_connection_tables", _get_tables)
 
     def get_connection_columns(self, table_name):
         sql = f"""
